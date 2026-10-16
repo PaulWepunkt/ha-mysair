@@ -1,178 +1,156 @@
-# Integración con Home Assistant — ciclo de vida y evaluación
+# Einbindung in Home Assistant – Lebenszyklus und Bewertung
 
-> Cada observación se clasifica como: ✅ **Correcto** · 🟡 **Mejorable** · 🟠 **Potencialmente obsoleto** · 🔴 **Posible bug** · 🔎 **Requiere investigación**.
+> Jede Beobachtung ist eingestuft: ✅ **Korrekt** · 🟡 **Verbesserungsfähig** · 🟠 **Möglicherweise veraltet** · 🔴 **Möglicher Fehler** · 🔎 **Zu untersuchen**.
+> Das Dokument beschreibt den aktuellen Stand. Behobene Mängel früherer Versionen stehen im `CHANGELOG.md` und in `docs/execution-plan.md`.
 
 ---
 
-## 1. Manifest y metadatos
+## 1. Manifest und Metadaten
 
-`manifest.json` (Confirmado):
+`manifest.json` (Bestätigt):
 
-| Campo | Valor | Evaluación |
+| Feld | Wert | Bewertung |
 |---|---|---|
 | `domain` | `mysair` | ✅ |
 | `config_flow` | `true` | ✅ |
-| `iot_class` | `cloud_push` | 🟡 híbrido (push MQTT + poll HTTP 60 s) |
-| `integration_type` | `hub` | ✅ razonable |
+| `iot_class` | `cloud_push` | ✅ Push per MQTT; die zusätzliche Abfrage alle 120 s löst nur eine Push-Meldung aus |
+| `integration_type` | `hub` | ✅ |
 | `dependencies` | `[]` | ✅ |
-| `requirements` | `aiohttp`, `paho-mqtt`, `requests`, `boto3`, `websocket-client` | 🔴 `aiohttp`, `paho-mqtt`, `boto3` **no se usan**; solo `requests` y `websocket-client` |
-| `quality_scale` | `silver` | 🔴 no cumple silver (sin tests, sin translations, unload roto) |
-| `homeassistant` | `2025.10.0` | 🟡 clave `homeassistant` mínima válida, pero ver §11 |
-| `version` | `1.0.0` | ✅ (requerido para custom) |
+| `requirements` | `requests`, `websocket-client` | ✅ nur tatsächlich genutzte Bibliotheken |
+| `quality_scale` | `silver` | ✅ von `hassfest` akzeptiert |
+| `documentation`, `issue_tracker`, `codeowners` | verweisen auf das Ursprungs-Repository | 🟡 für diesen Fork anzupassen |
+| `version` | SemVer | ✅ (für Custom-Integrationen Pflicht) |
 
-**Recomendación:** dejar en `requirements` solo `requests` y `websocket-client==1.8.0`; bajar `quality_scale` o retirarlo hasta cumplirlo.
-
----
-
-## 2. Config flow / options flow / credenciales
-
-`config_flow.py` (Confirmado):
-- Un solo paso `async_step_user` con `email` + `password`. ✅ estructura básica.
-- Login en executor (`async_add_executor_job(api.login)`). ✅ no bloquea el loop.
-- Manejo de errores: `invalid_auth` / `cannot_connect`. ✅ básico.
-
-Problemas:
-- 🔴 **Guarda `password` en claro** en `entry.data`, además de `access_token`/`refresh_token` que **nunca se reutilizan** (`config_flow.py:46-54`). Los tokens caducan y son ruido; la contraseña se necesita porque el setup hace login nuevo cada vez.
-- 🔴 **No llama a `async_set_unique_id`** → permite entradas duplicadas de la misma cuenta.
-- 🟡 **Sin options flow** (no hay ajustes: intervalo de refresco, selección de ubicación, etc.).
-- 🟡 **Sin reauth flow** (`async_step_reauth`) → si la contraseña cambia, hay que borrar y re-añadir.
-- 🟠 `FlowResult` importado de `homeassistant.data_entry_flow` (`config_flow.py:6`) — tipo válido pero el patrón moderno usa `ConfigFlowResult`. 🔎 verificar en la versión objetivo.
+Die Mindestversion von Home Assistant (≥ 2026.8.0) steht in `hacs.json` und im README; im Manifest einer Custom-Integration ist die Angabe nicht zulässig.
 
 ---
 
-## 3. Setup / unload / reload
+## 2. Einrichtungsdialog und Zugangsdaten
 
-`async_setup_entry` (`__init__.py:17-188`) — flujo en §Arquitectura.
-
-### 🔴 Bug crítico de unload
-- `async_unload_entry` está **definida como función anidada** dentro de `async_setup_entry` (`__init__.py:174`) y se registra con **`entry.add_update_listener(...)`** (`__init__.py:187`).
-- `add_update_listener` registra un **update listener** (invocado cuando la entrada se *actualiza*), **no** un manejador de descarga. HA busca un `async_unload_entry(hass, entry)` a **nivel de módulo** para descargar.
-- **Consecuencia (Confirmado por semántica de HA):**
-  - Al **descargar/recargar** la integración **no** se ejecuta el cierre real → el hilo MQTT, la tarea periódica y la sesión quedan **huérfanos** (fuga de recursos).
-  - Como *update listener*, esta función llama a `async_unload_platforms` y hace `hass.data.pop`, lo que ante cualquier update de la entrada **rompería** el estado.
-- **Recomendación:** mover `async_unload_entry` a nivel de módulo con firma estándar y `return await hass.config_entries.async_unload_platforms(...)`; registrar el update listener por separado (si se quiere reload).
-
-### 🔴 Tarea periódica huérfana
-- `refresh_status_periodic` se lanza con `hass.loop.create_task(...)` (`__init__.py:171`) y **nunca se guarda ni se cancela**. Al recargar → múltiples tareas acumuladas enviando `status`. 🔴 fuga + duplicación. Debería usarse `entry.async_create_background_task` y cancelarse en unload.
-- 🔴 Comentario dice "5 minutos" pero `asyncio.sleep(60)` = **1 minuto** (`__init__.py:168`).
-
-### 🟡 Preload de paho innecesario
-- `__init__.py:22` precarga `paho.mqtt.client` en executor "fuera del loop", pero **paho no se usa** en ningún sitio → import muerto que además obliga a la dependencia.
+`config_flow.py` (Bestätigt):
+- Schritt `async_step_user` mit `email` + `password`; Anmeldung im Executor. ✅
+- `async_set_unique_id(email.lower())` verhindert, dass dasselbe Konto zweimal eingerichtet wird. ✅
+- In der Config Entry werden nur `email` und `refresh_token` gespeichert; das Passwort bleibt im Speicher. ✅
+- Erneute Anmeldung über `async_step_reauth` / `async_step_reauth_confirm`, inklusive Prüfung, dass das Konto gleich bleibt (`account_mismatch`). ✅
+- Fehler: `invalid_auth` / `cannot_connect` / `unknown`, in allen Sprachen übersetzt. ✅
+- Rückgabetyp `ConfigFlowResult`. ✅
+- 🟡 **Kein Options Flow** (es gibt keine Einstellungen wie Abfrageintervall oder Standortauswahl).
 
 ---
 
-## 4. Coordinador / actualización de datos
+## 3. Setup / Unload / Reload
 
-- 🟠 **No usa `DataUpdateCoordinator`.** Implementa un patrón push manual: hilo MQTT → callback → `hass.bus.async_fire("mysair_update")` → cada entidad escucha y filtra.
-- **Evaluación:** funcional pero **no idiomático**. Problemas:
-  - 🟡 Fan-out O(nº entidades) por mensaje: cada `status` despierta a *todas* las entidades, que filtran por `ctl`/`zone_id`.
-  - 🟡 Sin estado centralizado → cada entidad guarda su propia copia; difícil de diagnosticar.
-  - 🟡 No hay `available`/disponibilidad basada en frescura de datos.
-- **Recomendación:** introducir un coordinador (o un almacén central en `hass.data`) que mantenga el último estado por zona y notifique a las entidades vía `async_dispatcher_send`/callbacks del coordinador.
-
----
-
-## 5. Entidades
-
-Comunes a climate/sensor/switch (Confirmado):
-- ✅ `unique_id` presente y estable.
-- ✅ `device_info` con `identifiers` consistentes → agrupan bien por zona.
-- ✅ Uso de `@callback` en handlers de evento.
-- ✅ `async_added_to_hass`/`async_will_remove_from_hass` suscriben/desuscriben correctamente del bus.
-- 🟡 **Sin `available`** → las entidades nunca aparecen como "no disponible" aunque MQTT esté caído.
-- 🟡 **Sin `should_poll = False` explícito** (climate/sensor/switch). Por defecto `SensorEntity`/`ClimateEntity` tienen `should_poll=True` salvo que se declare lo contrario → HA podría intentar `update()` (inexistente) periódicamente. 🔎 verificar impacto; recomendable `_attr_should_poll = False`.
-- 🟡 `sw_version="v1.0"` hardcodeado. ~~`model` difiere entre plataformas (`"Zonificador de aire"` vs `select.py` `"WiFi Thermostat"`)~~ — `select.py` ya no existe (eliminado en A3); `model` es ahora `"Zonificador de climatización"` de forma consistente en climate/sensor/switch (2026-07-21, para reflejar que también controla suelo radiante, no solo AC).
-
-### climate.py específico
-- ✅ `supported_features`: `TARGET_TEMPERATURE | TURN_ON | TURN_OFF`.
-- ✅ `hvac_modes`: OFF/HEAT/COOL.
-- 🔴 **`min_temp`/`max_temp` fijos (10/30)** ignorando `tmm`/`tmx` del dispositivo (`climate.py:43-44`).
-- 🔴 `async_set_temperature` con modo OFF **no envía comando** pero cambia consigna local (`climate.py:103-106`) → puede divergir del real.
-- 🟠 Con `TURN_ON`/`TURN_OFF` en features y HA moderno se requiere que `hvac_modes` y `turn_on/off` sean coherentes; `async_turn_on` reusa último modo o HEAT (`climate.py:167-169`). ✅ aceptable.
-
-### switch.py específico
-- 🔴 **`async_turn_on` envía `mode="1"` (= frío según `send_zone_command`)** (`switch.py:64`). "Encender" siempre pone la zona en **frío**, ignorando el modo previo. Probable bug de semántica.
-
-### sensor.py específico
-- ✅ device_class TEMPERATURE en temp/consigna.
-- 🟡 `MySairModeSensor` sin `device_class`/`options`; devuelve strings libres `OFF/HEAT/COOL`. Podría ser `SensorDeviceClass.ENUM`.
-
-### select.py — 🔴 CÓDIGO ROTO / MUERTO
-- **No está en `PLATFORMS`** (`__init__.py:14`) → nunca se carga. Confirmado.
-- Aunque se cargara, tiene bugs que impiden funcionar:
-  - `await api.get_locations()` — `get_locations` es **síncrono** (`requests`), no awaitable → `TypeError` (`select.py:21`).
-  - Itera `locations["entity"]` pero `get_locations` ya devuelve la lista `entity` → doble desreferencia rota (`select.py:22`).
-  - `self._api.aws_data` — atributo **inexistente** (es `aws_credentials`) (`select.py:68`).
-  - `print(...)` en vez de logger (`select.py:31`).
-- **Recomendación:** eliminar `select.py` o reescribirlo alineado con el resto (y sumarlo a `PLATFORMS`) — ver roadmap.
+- `async_setup_entry` erneuert die Sitzung mit dem `refresh_token`, erkennt den Aufbau, räumt verschwundene Zonen aus dem Geräteregister, startet MQTT-Client und Koordinator, lädt die Plattformen und startet die periodische Abfrage. ✅
+- Ungültige Sitzung → `ConfigEntryAuthFailed`; Netz-/Backend-Fehler oder ein Konto ohne Standort/Installation → `ConfigEntryNotReady`. ✅
+- Die periodische Abfrage läuft als `entry.async_create_background_task` und wird beim Entladen automatisch beendet. ✅
+- `async_unload_entry` steht auf Modulebene, entlädt die Plattformen, stoppt MQTT-Client und Koordinator und räumt `hass.data` auf. ✅
+- Reload erzeugt weder doppelte Entitäten noch einen doppelten Dienst (getestet). ✅
+- 🟡 Zwei Meldungen von `ConfigEntryNotReady` sind noch spanisch formuliert; sie erscheinen nur im Log bzw. in der Fehlermeldung der Integration.
 
 ---
 
-## 6. Servicios / diagnostics / repairs / translations
+## 4. Koordinator / Datenaktualisierung
 
-| Elemento | Estado | Evaluación |
+- Push-Muster ohne `DataUpdateCoordinator`: MQTT-Thread → Callback → `hass.bus.async_fire("mysair_update")` → `MySairCoordinator` (ein Abonnent je Config Entry) → Dispatcher-Signal je Zone → Entität. ✅
+- `DataUpdateCoordinator` ist für abfragende Integrationen gedacht; für reines Push ist der Dispatcher die übliche Lösung. ✅
+- 🟡 Kein zentraler Zustandsspeicher: Jede Entität hält ihre eigene Kopie der Zonenwerte. Für die Diagnose ist das ausreichend.
+
+---
+
+## 5. Entitäten
+
+Gemeinsam für climate/sensor/switch (Bestätigt):
+- ✅ Stabile `unique_id`.
+- ✅ `has_entity_name` mit `translation_key` bzw. Geräteklasse; Namen und Zustände kommen aus `translations/*.json`, Symbole aus `icons.json`.
+- ✅ Gemeinsame `device_info` (`device.py`); eine Zone = ein Gerät.
+- ✅ `_attr_should_poll = False` und `available` nach Aktualität der MQTT-Daten (`availability.py`).
+- ✅ `@callback` für Handler; Abonnements werden in `async_will_remove_from_hass` gelöst.
+- 🟡 **Fehler bei Befehlen werden nur geloggt.** Scheitert ein HTTP-Befehl, sieht der Nutzer keine Fehlermeldung in der Oberfläche; der optimistische Zustand wird später zurückgesetzt. Besser wäre ein `HomeAssistantError` mit übersetzter Meldung (Exception Translations).
+
+### climate.py
+- ✅ `supported_features`: `TARGET_TEMPERATURE | FAN_MODE | TURN_ON | TURN_OFF`.
+- ✅ `hvac_modes` je nach Fähigkeiten der Zone (`OFF` + `HEAT` und/oder `COOL`).
+- ✅ `min_temp`/`max_temp` aus `tmm`/`tmx`.
+- ✅ `fan_modes` `1`/`2`/`3`/`auto`, wenn die Zone einen Lüfter hat.
+- ✅ `async_turn_on` bevorzugt Heizen, fällt aber auf den ersten von der Zone unterstützten Modus zurück.
+- 🟡 `async_set_temperature` bei ausgeschalteter Zone sendet keinen Befehl, sondern ändert nur den lokalen Sollwert; er wird beim nächsten Einschalten mitgesendet. Bis dahin können Anzeige und Gerät voneinander abweichen.
+- 🟡 Die Richtung Heizen/Kühlen wird je Zone gesetzt. Bei Anlagen, deren Außeneinheit nur eine Richtung für alle Zonen kann, verhindert die Integration widersprüchliche Einstellungen derzeit nicht.
+
+### switch.py
+- ✅ „Ein/Aus“ schaltet mit dem zuletzt bekannten Modus ein.
+- ✅ „Fußbodenheizung“ berechnet `m` neu und behält Heizen/Kühlen und Luft bei; in Zonen ohne Fußboden nicht verfügbar.
+
+### sensor.py
+- ✅ Temperatur, Soll-Temperatur und Luftfeuchte mit Geräteklasse.
+- ✅ Modus als `SensorDeviceClass.ENUM` (`off`/`heat`/`cool`/`on`) mit übersetztem Attribut `medium`.
+- ✅ „Cloud-Verbindung“ als Diagnose-Entität (`EntityCategory.DIAGNOSTIC`), `ENUM` mit `online`/`offline`.
+
+---
+
+## 6. Dienste / Diagnose / Repairs / Übersetzungen
+
+| Element | Stand | Bewertung |
 |---|---|---|
-| Servicios propios (`services.yaml`) | ❌ ninguno | 🟡 aceptable (todo vía entidades) |
-| `diagnostics.py` | ❌ ausente | 🟡 recomendable para depurar sin exponer secretos |
-| Repairs | ❌ ausente | 🟢 opcional |
-| `translations/` + `strings.json` | ❌ ausentes | 🔴 requerido para quality_scale; el config flow no está traducido |
+| Eigene Dienste (`services.yaml`) | `mysair.stop_installation` | ✅ einmal je Domain registriert, nach dem letzten Entladen entfernt |
+| `diagnostics.py` | vorhanden | ✅ mit `async_redact_data` |
+| Repairs | nicht vorhanden | 🟢 optional |
+| `translations/` + `strings.json` | Deutsch, Englisch, Spanisch | ✅ Einrichtungsdialog, Dienst, Entitätsnamen und -zustände |
+| `icons.json`, `brand/` | vorhanden | ✅ |
 
 ---
 
-## 7. Errores, excepciones y autenticación expirada
+## 7. Fehler, Ausnahmen und abgelaufene Anmeldung
 
-- ✅ `send_instruction` maneja `401` con refresh + reintento único (`api.py:205-213`).
-- 🟡 El resto de llamadas HTTP no manejan expiración; `get_*` devuelven `[]` ante cualquier error → un token caducado en el arranque se ve como "sin datos" y `setup` devuelve `False` sin `ConfigEntryAuthFailed`.
-- 🔴 **No se usa `ConfigEntryAuthFailed`/`ConfigEntryNotReady`.** Si el login falla en setup se propaga una `Exception` genérica (o `return False`) en vez de las excepciones idiomáticas que disparan reautenticación/reintento. 🔎 verificar comportamiento exacto de HA ante `return False`.
-- 🟡 Handlers de entidad tragan excepciones y solo loguean (`climate.py:118`, `switch.py:69`) → el usuario no ve fallo del comando.
-
----
-
-## 8. Polling vs push / shutdown
-
-- **Push:** MQTT → event bus. ✅ concepto correcto.
-- **Poll oculto:** refresco HTTP cada 60 s (provoca push). 🟡 no declarado como polling de HA.
-- **Shutdown:** 🔴 roto (ver §3). No hay registro de `EVENT_HOMEASSISTANT_STOP` para cerrar el WS; depende del unload roto.
+- ✅ Einheitliche Klassifizierung der HTTP-Fehler (`api._http_error`): 5xx/429 vorübergehend, alles andere erneute Anmeldung.
+- ✅ `401` wird überall einmal mit erneuerter Sitzung wiederholt.
+- ✅ Stirbt die Sitzung im laufenden Betrieb, fordern MQTT-Thread und periodische Abfrage sofort die erneute Anmeldung an (`entry.async_start_reauth`).
+- 🔴 `send_instruction` akzeptiert als Erfolgsmeldung nur `msg == "Creado"`. Englischsprachige Konten erhalten `"Created"`; ihre Befehle werden ausgeführt, aber als abgelehnt geloggt und lösen keine Bestätigung aus. Korrektur geplant.
 
 ---
 
-## 9. Almacenamiento de estado
+## 8. Abfrage vs. Push / Herunterfahren
 
-- Estado en memoria: `hass.data[DOMAIN][entry_id]` con `api`, `devices`, `installations`, `mqtt`. **Confirmado**.
-- ✅ No usa `Store`/persistencia propia (no necesaria).
-- 🟡 El estado de las entidades **no se restaura** tras reinicio hasta el primer `status` MQTT (sin `RestoreEntity`).
-
----
-
-## 10. Concurrencia loop vs hilos
-
-- ✅ MQTT en hilo daemon; el callback usa `hass.loop.call_soon_threadsafe(...)` para volver al loop (`__init__.py:116`). Correcto cruce hilo→loop.
-- ✅ HTTP síncrono siempre vía `async_add_executor_job`.
-- 🔎 `refresh_status_periodic` corre en el loop y llama a `async_add_executor_job` en cada iteración — correcto, pero sin manejo de cancelación.
+- **Push:** MQTT → Event-Bus → Koordinator. ✅
+- **Abfrage:** alle 120 s eine HTTP-Anweisung `status`, die eine Push-Meldung auslöst. ✅ Ausgleich für verlorene Nachrichten (Clean Session).
+- **Herunterfahren:** über `async_unload_entry`; der MQTT-Thread ist ein Daemon und blockiert das Beenden nicht. ✅
 
 ---
 
-## 11. Compatibilidad con Home Assistant moderno
+## 9. Speicherung von Zuständen
 
-| Aspecto | Riesgo | Certeza |
+- Im Speicher: `hass.data[DOMAIN][entry_id]` mit `api`, `devices`, `installations`, `mqtt`, `coordinator`. **Bestätigt.**
+- ✅ Kein eigener `Store` nötig.
+- 🟡 Entitäten stellen ihren Zustand nach einem Neustart nicht wieder her (`RestoreEntity`); sie sind bis zum ersten Status „nicht verfügbar“. Das ist gewollt: lieber keine Daten als veraltete.
+
+---
+
+## 10. Nebenläufigkeit: Loop und Threads
+
+- ✅ MQTT im Daemon-Thread; der Callback kehrt über `hass.loop.call_soon_threadsafe(...)` in den Loop zurück.
+- ✅ Synchrones HTTP immer über `async_add_executor_job`.
+- ✅ Die periodische Abfrage ist ein Hintergrund-Task der Config Entry und wird beim Entladen abgebrochen.
+- ✅ Der Timer für die vorausschauende Erneuerung ist ein `threading.Timer` und wird bei `stop()` abgebrochen.
+
+---
+
+## 11. Kompatibilität mit aktuellem Home Assistant
+
+| Aspekt | Stand | Gewissheit |
 |---|---|---|
-| `datetime.utcnow()` en firma AWS (`api.py:294`) | Obsoleto en Python 3.12+ (usado por HA reciente); genera DeprecationWarning, no fallo inmediato | Confirmado |
-| `add_update_listener` usado como unload | Rompe unload/reload en cualquier versión | 🔴 Confirmado |
-| `should_poll` no desactivado | Posibles updates espurios | 🔎 |
-| `FlowResult` vs `ConfigFlowResult` | Renombrado en versiones recientes; import antiguo puede quedar deprecado | 🔎 |
-| Requirements con libs no usadas | HA instala deps innecesarias (boto3 es pesado) | Confirmado |
-| Sin `strings.json` | Warnings de traducción; incumple requisitos de calidad | Confirmado |
-| Bloqueo de import en setup (`__import__` paho) | Innecesario, pero se hace en executor (no bloquea) | Confirmado |
+| Testumgebung | `pytest-homeassistant-custom-component` passend zu HA 2026.9 (Python 3.14) | Bestätigt |
+| Entfernen verwaister Geräte | `async_remove_device` statt des abgekündigten `remove_config_entry_id` | Bestätigt |
+| Einheit der Luftfeuchte | `UnitOfRatio.PERCENTAGE` | Bestätigt |
+| Entity-IDs | Entstehen aus Gerät + Entitätsname (`has_entity_name`); bestehende IDs bleiben erhalten | Bestätigt |
+| Markenbilder | lokal in `brand/` (HA ≥ 2026.3.0) | Bestätigt |
+
+Der Pin in `requirements-test-ha.txt` muss mit der produktiv genutzten HA-Version Schritt halten, sonst bleiben Abkündigungen unbemerkt.
 
 ---
 
-## 12. Resumen de acciones prioritarias (integración HA)
+## 12. Mögliche nächste Schritte
 
-1. 🔴 Corregir `async_unload_entry` (nivel módulo, firma estándar) y cierre de recursos.
-2. 🔴 Gestionar la tarea periódica (guardar + cancelar; corregir intervalo/comentario).
-3. 🔴 Eliminar o arreglar `select.py`.
-4. 🔴 Depurar `requirements` (quitar aiohttp/paho/boto3) y el preload de paho.
-5. 🟡 Añadir `unique_id` en config entry, reauth y disponibilidad de entidades.
-6. 🟡 Introducir coordinador/almacén central y `strings.json`/translations.
-
-Detalle de severidad y evidencia en `docs/` (fase 7 del análisis) y `docs/development-roadmap.md`.
+1. 🔴 Erfolgsprüfung von `/send/instruction` sprachunabhängig machen.
+2. 🟡 Fehler bei Befehlen als übersetzte `HomeAssistantError` an die Oberfläche geben.
+3. 🟡 Verweise im Manifest (`documentation`, `issue_tracker`, `codeowners`) auf den Fork anpassen.
+4. 🟡 Restliche spanische Texte in Code- und Konfigurationsdateien vereinheitlichen.
+5. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.

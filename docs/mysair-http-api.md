@@ -1,71 +1,71 @@
-# API HTTP de MySair
+# HTTP-API von MySair
 
-> Base URL: `https://api.mysair.es/v1` — **Confirmado** (`api.py:18`).
-> Toda la información procede de **ingeniería inversa del código de esta integración**, no de documentación oficial. Certeza: **Confirmado** = la petición existe en el código; los campos de respuesta marcados **Inferido/Desconocido** solo se conocen por lo que el código consume.
-> ⚠️ No se incluyen valores reales de tokens, cookies ni credenciales. Los ejemplos están **sanitizados**.
+> Basis-URL: `https://api.mysair.es/v1` – **Bestätigt** (`api.py`, `MySairAPI.base_url`).
+> Alle Angaben stammen aus der **Analyse des Codes dieser Integration und der offiziellen Web-App**, nicht aus einer offiziellen Dokumentation. Gewissheit: **Bestätigt** = der Aufruf existiert im Code; Antwortfelder mit **Abgeleitet/Unbekannt** sind nur insoweit bekannt, wie der Code sie nutzt.
+> ⚠️ Es sind keine echten Token, Cookies oder Zugangsdaten enthalten. Alle Beispiele sind **bereinigt**.
 
 ---
 
-## Resumen de endpoints
+## Endpunkte im Überblick
 
-| Grupo | Método | Ruta | Función que lo usa | Certeza |
+| Gruppe | Methode | Pfad | Nutzende Funktion | Gewissheit |
 |---|---|---|---|---|
-| Auth | POST | `/user/login` | `MySairAPI.login` | Confirmado |
-| Auth | PUT | `/user/refreshtokens` | `MySairAPI.refresh_tokens` | Confirmado |
-| Auth | PUT | `/user/refreshawscredentials` | `MySairAPI.refresh_aws_credentials` | Confirmado |
-| Descubrimiento | GET | `/locations` | `MySairAPI.get_locations` | Confirmado |
-| Descubrimiento | GET | `/installations?location_id=&validated=1` | `MySairAPI.get_installations` | Confirmado |
-| Descubrimiento | GET | `/devices?installation_ref=` | `MySairAPI.get_devices` | Confirmado |
-| Comandos | POST | `/send/instruction` | `MySairAPI.send_instruction` | Confirmado |
+| Anmeldung | POST | `/user/login` | `MySairAPI.login` | Bestätigt |
+| Anmeldung | PUT | `/user/refreshtokens` | `MySairAPI.refresh_tokens` | Bestätigt |
+| Anmeldung | PUT | `/user/refreshawscredentials` | `MySairAPI.refresh_aws_credentials` | Bestätigt |
+| Erkennung | GET | `/locations` | `MySairAPI.get_locations` | Bestätigt |
+| Erkennung | GET | `/installations?location_id=&validated=1` | `MySairAPI.get_installations` | Bestätigt |
+| Erkennung | GET | `/devices?installation_ref=` | `MySairAPI.get_devices` | Bestätigt |
+| Befehle | POST | `/send/instruction` | `MySairAPI.send_instruction` | Bestätigt |
 
-**Autenticación general (Confirmado):** todos los endpoints salvo `/user/login` y `/user/refreshtokens` usan header `Authorization: Bearer <access_token>`.
-**Timeouts (Confirmado):** login 15 s, refreshtokens 10 s, refreshawscredentials 15 s, locations/installations/devices 10 s, send/instruction 10 s.
-**Reintentos (Confirmado):** solo `send_instruction` reintenta **una vez** ante `401` tras refrescar tokens (`api.py:205-213`). El resto no reintenta.
-**Formato de respuesta común (Inferido):** las respuestas encapsulan datos en una clave `entity` (objeto o lista) y, en instrucciones, `msg`/`error`.
+**Authentifizierung (Bestätigt):** Alle Endpunkte außer `/user/login` und `/user/refreshtokens` verwenden den Header `Authorization: Bearer <access_token>`.
+**Zeitlimits (Bestätigt):** login 15 s, refreshtokens 10 s, refreshawscredentials 15 s, locations/installations/devices 10 s, send/instruction 10 s.
+**Wiederholung (Bestätigt):** Alle Endpunkte mit Bearer-Token wiederholen eine Anfrage **einmal** nach einem `401`, nachdem die Sitzung erneuert wurde (`_authed_request`, `send_instruction`). `send_instruction` erneuert dabei zusätzlich die AWS-Zugangsdaten.
+**Gemeinsames Antwortformat (Abgeleitet):** Antworten verpacken die Daten in einem Schlüssel `entity` (Objekt oder Liste), bei Anweisungen zusätzlich `msg`/`error`.
+
+### Fehlerklassifizierung (`api._http_error`)
+
+Das Backend basiert auf **Laravel Passport**. Für alle Endpunkte gilt eine Regel nach Bereich:
+
+- `5xx` und `429` → `MySairConnectionError` (vorübergehend; Home Assistant versucht es später erneut).
+- Jeder andere Code außerhalb von 2xx (`400`, `401`, `403`, `404`, …) → `MySairAuthError` (erneute Anmeldung nötig).
+
+Die Regel ist bewusst nach Bereich formuliert: Eine Aufzählung einzelner Codes hatte zuvor versagt, weil niemand an dieser Stelle einen `404` erwartete (siehe §1.2). Netzwerkfehler (`requests.RequestException`) werden zu `MySairConnectionError`.
 
 ---
 
-## 1. Autenticación
+## 1. Anmeldung
 
-### 1.1 `POST /user/login` — **Confirmado**
-- **Finalidad:** obtener `access_token` y `refresh_token`.
-- **Auth:** ninguna.
-- **Headers:** `Content-Type: application/json` (implícito por `json=`).
+### 1.1 `POST /user/login` – **Bestätigt**
+- **Zweck:** `access_token` und `refresh_token` erhalten. Wird nur im Einrichtungsdialog und bei der erneuten Anmeldung (Reauth) verwendet.
+- **Authentifizierung:** keine.
+- **Header:** `Content-Type: application/json` (implizit durch `json=`).
 - **Body:**
   ```json
   { "email": "<EMAIL>", "password": "<PASSWORD>" }
   ```
-- **Respuesta esperada (200):**
+- **Erwartete Antwort (200):**
   ```json
-  { "entity": { "access_token": "<REDACTED_JWT>", "refresh_token": "<REDACTED>" } }
+  { "entity": { "access_token": "<REDACTED_JWT>", "refresh_token": "<REDACTED>", "expires_at": 0 } }
   ```
-- **Campos consumidos:** `entity.access_token`, `entity.refresh_token` (`api.py:42-44`). El resto de `entity` se guarda en `self.entity` pero **no se usa**.
-- **Errores:** cualquier `status_code != 200` → `Exception("Login error: <code> <text>")` (`api.py:38-39`). Sin distinción 401 vs 500.
-- **Usado por:** `config_flow.async_step_user` y `async_setup_entry`.
-- **Certeza campos:** estructura `entity` **Inferida**; presencia de tokens **Confirmada** (se validan).
+- **Genutzte Felder:** `entity.access_token`, `entity.refresh_token`. Der Rest von `entity` wird in `self.entity` abgelegt, aber nicht genutzt.
+- **Fehler:** Klassifizierung siehe oben; fehlt `access_token` in der Antwort → `MySairAuthError`.
+- **Genutzt von:** `config_flow.async_step_user` und `async_step_reauth_confirm`.
 
-### 1.2 `PUT /user/refreshtokens` — **Confirmado**
-- **Finalidad:** renovar tokens con el `refresh_token`.
-- **Auth:** ninguna (el refresh_token va en el body).
+### 1.2 `PUT /user/refreshtokens` – **Bestätigt**
+- **Zweck:** Token mit dem `refresh_token` erneuern. So startet die Integration bei jedem Start ihre Sitzung – ohne gespeichertes Passwort.
+- **Authentifizierung:** keine (das refresh_token steht im Body).
 - **Body:** `{ "refresh_token": "<REDACTED>" }`
-- **Respuesta (200):** `{ "entity": { "access_token": "...", "refresh_token": "..." } }`
-- **Campos consumidos:** `entity.access_token`, `entity.refresh_token` (`api.py:78-79`).
-- **Errores (Confirmado en producción, 2026-09-11):** el backend es **Laravel Passport**. Cuando el
-  `refresh_token` ya no existe en servidor responde **`404`**, no `401`, con el cuerpo
-  `No query results for model [Laravel\Passport\RefreshToken]`. Un token se invalida al cerrar
-  sesión desde la app oficial, al cambiar la contraseña, o por limpieza de tokens antiguos.
-- **Clasificación de errores (`api._http_error`):** `5xx` y `429` → `MySairConnectionError`
-  (transitorio, reintentar). Cualquier otro no-2xx → `MySairAuthError` (requiere reauth). La regla
-  es por rango a propósito: enumerar códigos concretos fue justo lo que falló, porque nadie
-  esperaba un 404 aquí.
-- **Usado por:** el arranque de la integración (`async_setup_entry`), `_authed_request` en el
-  reintento 401, y `send_instruction`.
+- **Antwort (200):** `{ "entity": { "access_token": "...", "refresh_token": "..." } }`
+- **Genutzte Felder:** `entity.access_token`, `entity.refresh_token`. Das `refresh_token` wechselt bei jeder Erneuerung; das neue wird über den Callback `on_tokens_refreshed` in der Config Entry gespeichert.
+- **Fehler (bestätigt):** Existiert das `refresh_token` auf dem Server nicht mehr, antwortet das Backend mit **`404`**, nicht `401`, und dem Body `No query results for model [Laravel\Passport\RefreshToken]`. Ein Token wird ungültig durch Abmelden in der offiziellen App, eine Passwortänderung oder das Aufräumen alter Token auf dem Server. Nach der Regel oben führt das zu `MySairAuthError` und damit zur erneuten Anmeldung.
+- **Genutzt von:** `async_setup_entry`, `_authed_request` und `send_instruction` (jeweils bei einem `401`).
 
-### 1.3 `PUT /user/refreshawscredentials` — **Confirmado**
-- **Finalidad:** obtener credenciales temporales de **AWS IoT** para la conexión MQTT.
-- **Auth:** `Authorization: Bearer <access_token>`.
-- **Body:** ninguno.
-- **Respuesta (200):**
+### 1.3 `PUT /user/refreshawscredentials` – **Bestätigt**
+- **Zweck:** temporäre Zugangsdaten für **AWS IoT** (MQTT-Verbindung).
+- **Authentifizierung:** `Authorization: Bearer <access_token>`.
+- **Body:** keiner.
+- **Antwort (200):**
   ```json
   {
     "entity": {
@@ -74,99 +74,106 @@
       "aws_access_key_id": "<REDACTED>",
       "aws_secret_access_key": "<REDACTED>",
       "aws_security_token": "<REDACTED>",
-      "aws_mqtt_user": "web####"
+      "aws_mqtt_user": "<aws_mqtt_user>",
+      "aws_base_topic": "pro/v1/",
+      "aws_expires_at": 0
     }
   }
   ```
-- **Campos consumidos (Confirmado, todos requeridos):** las 6 claves de `required_keys` (`api.py:107-114`). Si falta alguna → `Exception("Credenciales AWS incompletas o inválidas")`.
-- **Errores:** `!=200` → excepción propagada.
-- **Usado por:** `MySairMQTTClient._run` (directa o indirectamente).
-- **Nota de seguridad:** estas credenciales son secretas y temporales; **no** deben loguearse. El código loguea el `aws_mqtt_user` (`api.py:130`) — ver `docs/security-and-privacy.md`.
+- **Genutzte Felder (Bestätigt):** Die sechs Pflichtfelder `aws_mqtt_host` bis `aws_mqtt_user`; fehlt eines → Ausnahme „AWS credentials incomplete or invalid“. Optional: `aws_base_topic` (Basis der MQTT-Topics) und `aws_expires_at` (für die vorausschauende Erneuerung).
+- **Genutzt von:** `MySairMQTTClient._run` vor jedem Verbindungsversuch, wenn die Zugangsdaten fehlen oder bald ablaufen.
+- **Sicherheitshinweis:** Diese Zugangsdaten sind geheim und temporär und werden nicht geloggt; geloggt wird nur `aws_mqtt_user` auf Stufe DEBUG. Siehe `docs/security-and-privacy.md`.
 
 ---
 
-## 2. Descubrimiento de sistemas (topología)
+## 2. Erkennung des Aufbaus
 
-### 2.1 `GET /locations` — **Confirmado**
-- **Finalidad:** listar ubicaciones de la cuenta.
-- **Auth:** Bearer.
-- **Respuesta (200):** `{ "entity": [ { "id": <LOCATION_ID>, ... }, ... ] }`
-- **Campos consumidos:** solo `entity[0].id` (`__init__.py:39-40`). **Solo se usa la primera ubicación.** ⚠️ Ver hallazgos.
-- **Errores:** `!=200` → excepción interna, pero el método **devuelve `[]`** (`api.py:151-153`), lo que el setup interpreta como "sin ubicaciones" → `return False`.
-- **Certeza:** existencia **Confirmada**; campos distintos de `id` **Desconocidos**.
+Die Erkennungsmethoden geben Fehler als `MySairAuthError`/`MySairConnectionError` weiter. Eine leere Liste bedeutet ausschließlich „das Konto enthält keine Daten“. (Früher lieferten sie bei jedem Fehler `[]`; eine abgelaufene Sitzung sah dadurch wie ein leeres Konto aus.)
 
-### 2.2 `GET /installations?location_id=<id>&validated=1` — **Confirmado**
-- **Finalidad:** instalaciones (sistemas) dentro de una ubicación.
-- **Auth:** Bearer.
-- **Parámetros query:** `location_id` (requerido), `validated=1` (fijo — **Inferido:** filtra instalaciones validadas).
-- **Respuesta (200):** `{ "entity": [ { "reference": "<INST_REF>", ... }, ... ] }`
-- **Campos consumidos:** `entity[].reference` (`__init__.py:51`). El `reference` actúa como **`ctl`** (controlador) en MQTT y comandos.
-- **Errores:** `!=200` → excepción; método devuelve `[]`.
+### 2.1 `GET /locations` – **Bestätigt**
+- **Zweck:** Standorte des Kontos auflisten.
+- **Authentifizierung:** Bearer.
+- **Antwort (200):** `{ "entity": [ { "id": <LOCATION_ID>, ... }, ... ] }`
+- **Genutzte Felder:** nur `entity[0].id`. **Es wird nur der erste Standort genutzt** (bewusste Abgrenzung, `docs/known-unknowns.md` #15).
+- **Leere Liste** → `ConfigEntryNotReady`.
+- **Gewissheit:** Existenz **Bestätigt**; Felder außer `id` **Unbekannt**.
 
-### 2.3 `GET /devices?installation_ref=<ref>` — **Confirmado**
-- **Finalidad:** dispositivos/termostatos (zonas) de una instalación.
-- **Auth:** Bearer.
-- **Parámetros query:** `installation_ref` (requerido).
-- **Respuesta (200):** `{ "entity": [ { "reference": "<DEV_REF>", "name": "<ZONA>", ... }, ... ] }`
-- **Campos consumidos:** `dev.reference` (o fallback `rf`/`id`) y `dev.name` (`climate.py:25-26`, `sensor.py:20-21`, `switch.py:19-20`).
-- **Certeza:** los fallbacks `rf`/`id` sugieren que el nombre de campo **no está confirmado** al 100% → **Inferido**.
+### 2.2 `GET /installations?location_id=<id>&validated=1` – **Bestätigt**
+- **Zweck:** Installationen (Anlagen) eines Standorts.
+- **Authentifizierung:** Bearer.
+- **Query-Parameter:** `location_id` (Pflicht), `validated=1` (fest – schließt Installationen aus, die noch nie Verbindung hatten, siehe `docs/known-unknowns.md` #14).
+- **Antwort (200):** `{ "entity": [ { "reference": "<INST_REF>", ... }, ... ] }`
+- **Genutzte Felder:** `entity[].reference`. Die `reference` dient als **`ctl`** (Controller) in MQTT und Befehlen.
+- **Leere Liste** → `ConfigEntryNotReady`.
+
+### 2.3 `GET /devices?installation_ref=<ref>` – **Bestätigt**
+- **Zweck:** Geräte/Thermostate (Zonen) einer Installation.
+- **Authentifizierung:** Bearer.
+- **Query-Parameter:** `installation_ref` (Pflicht).
+- **Antwort (200):** `{ "entity": [ { "reference": "<DEV_REF>", "name": "<ZONE>", ... }, ... ] }`
+- **Genutzte Felder:** `reference` (Rückfall auf `rf`/`id`) und `name`.
+- **Gewissheit:** Die Rückfälle `rf`/`id` zeigen, dass der Feldname nicht zu 100 % bestätigt ist → **Abgeleitet** (`docs/known-unknowns.md` #12/#13).
 
 ---
 
-## 3. Envío de comandos e instrucciones
+## 3. Befehle und Anweisungen
 
-### 3.1 `POST /send/instruction` — **Confirmado**
-- **Finalidad:** enviar **una o varias** instrucciones (comandos de control o solicitud de estado). El backend las traduce y las entrega a los dispositivos; el estado resultante vuelve por **MQTT**.
-- **Auth:** Bearer.
-- **Body:** array JSON de objetos instrucción.
+### 3.1 `POST /send/instruction` – **Bestätigt**
+- **Zweck:** **eine oder mehrere** Anweisungen senden (Steuerbefehle oder Zustandsanforderung). Das Backend übersetzt sie und stellt sie den Geräten zu; der daraus folgende Zustand kommt per **MQTT** zurück.
+- **Authentifizierung:** Bearer.
+- **Body:** JSON-Array von Anweisungsobjekten.
 
-**Estructura de instrucción (Confirmado — `api.py:269-276`, `__init__.py:156-163`):**
+**Aufbau einer Anweisung (Bestätigt – `send_zone_command`, `send_installation_command`):**
 ```json
 [
   {
     "sender": "WEB",
     "ctl": "<INSTALLATION_REFERENCE>",
-    "app": "<aws_mqtt_user o 'web0077'>",
-    "device": "<DEVICE_REFERENCE o ''>",
-    "command": "<mode|temp|power|status>",
-    "value": "<depende del comando>"
+    "app": "<aws_mqtt_user>",
+    "device": "<DEVICE_REFERENCE oder ''>",
+    "command": "<mode|temp|power|fanspeed|stop|status>",
+    "value": "<abhängig vom Befehl>"
   }
 ]
 ```
 
-**Catálogo completo de comandos (CONFIRMADO desde la app oficial — ver `docs/protocol-findings.md`):**
+Fehlen die AWS-Zugangsdaten, setzt der Code für `app` einen festen Ersatzwert ein.
 
-| `command` | `value` | Semántica | Implementado |
+**Vollständiger Befehlskatalog (BESTÄTIGT aus der offiziellen App – siehe `docs/protocol-findings.md`):**
+
+| `command` | `value` | Bedeutung | Umgesetzt |
 |---|---|---|---|
-| `mode` | `{"mode":"0".."5","temperature":"<tc>"}` | **Encender / fijar modo.** `m`: par=calor, impar=frío; {0,1,4,5}=AC, {2,3,4,5}=suelo | ✅ (calor/frío desde `climate.py`; combinación AC/suelo desde `switch.py` → `MySairFloorSwitch`, F4 — reutiliza este mismo comando, recalculando `m` con `compute_mode_value`, sin comando nuevo) |
-| `power` | `"0"` | **Apagar** (no existe `power:"1"`; encender se hace con `mode`) | ✅ |
-| `temp` | `"<temperatura>"` (string) | Cambio de consigna | ✅ |
-| `status` | `"sync"` (con `device:""`) | Solicitar estado | ✅ |
-| `fanspeed` | `"<n>"` (string) | Velocidad de ventilador | ✅ (F2) |
-| `stop` | `"1"` | Parar instalación | ✅ (F5, `send_installation_command`) |
-| `temporizer` | `<timer>` | Temporizador | ❌ — descartado (F6): forma del payload de escritura sin confirmar en el bundle, ver `known-unknowns.md` #27 |
-| `programs` | `""` | Leer programas | ❌ — descartado (F6): no hay comando de escritura confirmado, ver `known-unknowns.md` #27 |
+| `mode` | `{"mode":"0".."5","temperature":"<tc>"}` | **Einschalten / Modus setzen.** `m`: gerade=Heizen, ungerade=Kühlen; {0,1,4,5}=Luft, {2,3,4,5}=Fußboden | ✅ (Heizen/Kühlen aus `climate.py`; Kombination Luft/Fußboden aus `switch.py` → `MySairFloorSwitch`, die denselben Befehl nutzt und `m` mit `compute_mode_value` neu berechnet) |
+| `power` | `"0"` | **Ausschalten** (es gibt kein `power:"1"`; eingeschaltet wird über `mode`) | ✅ |
+| `temp` | `"<temperatur>"` (String) | Soll-Temperatur ändern | ✅ |
+| `status` | `"sync"` (mit `device:""`) | Zustand anfordern | ✅ |
+| `fanspeed` | `"<n>"` (String, `"0"`–`"4"`) | Lüfterstufe | ✅ |
+| `stop` | `"1"` | Installation stoppen | ✅ (`send_installation_command`, Dienst `mysair.stop_installation`) |
+| `temporizer` | `<timer>` | Timer | ❌ bewusst nicht: Format zum Setzen im Bundle nicht bestätigt, siehe `known-unknowns.md` #27 |
+| `programs` | `""` | Programme lesen | ❌ bewusst nicht: kein bestätigter Schreibbefehl, siehe `known-unknowns.md` #27 |
 
-> ✅ **Resuelto:** la codificación de modo del **comando** (`0`=calor, `1`=frío para AC) **es correcta** en la integración. La antigua "inconsistencia" venía de que el parser de estado leía `e` (encendido) como si fuera el modo; corregido en `status_parser.py` (usa `e` para on/off y la paridad de `m` para calor/frío). `switch.turn_on` ya no fuerza frío: enciende con `mode` preservando el último modo (por defecto calor). Ver `docs/protocol-findings.md §7`.
+> ✅ Die Kodierung des **Befehls** `mode` (`0`=Heizen, `1`=Kühlen für Luft) ist korrekt. Siehe `docs/protocol-findings.md` §7.
 
-- **Respuesta esperada (201):**
+- **Erwartete Antwort (201):**
   ```json
-  { "msg": "Creado", "error": [] }
+  { "msg": "<Bestätigungstext>", "error": [], "entity": { "value": [ { "orderId": "<ORDER_ID>" } ] } }
   ```
-- **Validación (Confirmado, `api.py:216-223`):** exige `status_code == 201`, `msg == "Creado"` y `error` vacío; en otro caso lanza excepción.
-- **Errores conocidos:**
-  - `401` → refresca tokens + credenciales AWS y **reintenta una vez** (`api.py:205-213`).
-  - Cualquier otro `!=201` → `Exception("Instruction error: ...")`.
-  - `msg != "Creado"` o `error` no vacío → `Exception("Instruction rejected: ...")`.
-- **Timeout:** 10 s. **Reintentos:** 1 (solo 401).
-- **Usado por:** `send_zone_command` (climate/switch) y `refresh_status_periodic`.
+  `entity.value[0].orderId` dient der Zuordnung zur Quittung im MQTT-Topic `feedback` (`api.extract_order_id`).
+- **Prüfung (Bestätigt):** verlangt `status_code == 201`, `msg == "Creado"` und ein leeres `error`.
+  > ⚠️ **Bekannte Schwäche:** Der Text in `msg` hängt von der Sprache des MySair-Kontos ab (`"Creado"` oder `"Created"`). Ein englischsprachiges Konto erhält `"Created"`; der Befehl wird dann zwar ausgeführt, von der Integration aber als abgelehnt gewertet. Eine Korrektur ist geplant.
+- **Bekannte Fehler:**
+  - `401` → erneuert Token + AWS-Zugangsdaten und **wiederholt einmal**.
+  - Jeder andere Code außer `201` → klassifiziert über `_http_error`.
+  - `msg` abweichend oder `error` nicht leer → Ausnahme „Instruction rejected“.
+- **Zeitlimit:** 10 s. **Wiederholungen:** 1 (nur bei 401).
+- **Genutzt von:** `send_zone_command` (climate/switch), `send_installation_command` (Dienst, `refresh_status_periodic`).
 
-**Ejemplo sanitizado — poner zona en calor a 21°:**
+**Bereinigtes Beispiel – Zone auf Heizen mit 21 °C:**
 ```json
 [{ "sender":"WEB", "ctl":"INST_REF", "app":"webXXXX", "device":"DEV_REF",
    "command":"mode", "value":{"mode":"0","temperature":"21.0"} }]
 ```
-**Ejemplo sanitizado — solicitar estado:**
+**Bereinigtes Beispiel – Zustand anfordern:**
 ```json
 [{ "sender":"WEB", "ctl":"INST_REF", "app":"webXXXX", "device":"",
    "command":"status", "value":"sync" }]
@@ -174,33 +181,34 @@
 
 ---
 
-## 4. Endpoints auxiliares / no confirmados
+## 4. Weitere Endpunkte
 
-- No existen otros endpoints en el código.
-- **Desconocido:** endpoints para escenas, programación horaria, velocidad de ventilador, apertura de compuertas, o lectura directa de estado por HTTP (el estado solo llega por MQTT).
+- Im Code gibt es keine weiteren Endpunkte.
+- Einen HTTP-Endpunkt zum direkten Lesen des Zustands gibt es nicht; der Zustand kommt nur per MQTT (`docs/known-unknowns.md` #18).
+- **Unbekannt:** Endpunkte für Szenen oder zum Schreiben von Zeitprogrammen.
 
 ---
 
-## 5. Errores y robustez (observaciones)
+## 5. Fehlerbehandlung und Robustheit
 
-| Aspecto | Situación | Certeza |
+| Aspekt | Situation | Gewissheit |
 |---|---|---|
-| Distinción de códigos HTTP | No se distingue 401/403/5xx salvo en `send_instruction` | Confirmado |
-| Reautenticación proactiva | No hay; el `access_token` no se refresca hasta un 401 en instrucciones | Confirmado |
-| `get_locations/installations/devices` tragan la excepción y devuelven `[]` | Puede enmascarar fallos de red como "sin datos" | Confirmado |
-| `refresh_tokens` devuelve `False` en error | El llamador debe comprobarlo (lo hace) | Confirmado |
-| Sin validación de esquema de respuesta | Se asume `entity` presente | Confirmado |
+| Unterscheidung der HTTP-Codes | Einheitlich nach Bereich (`_http_error`): 5xx/429 vorübergehend, sonst erneute Anmeldung | Bestätigt |
+| Vorausschauende Token-Erneuerung | Keine für das HTTP-Token; erneuert wird bei einem `401` | Bestätigt |
+| Erkennung bei Fehlern | Fehler werden weitergereicht, nicht als leere Liste verschluckt | Bestätigt |
+| Sitzung stirbt im laufenden Betrieb | MQTT-Thread und periodischer Task fordern die erneute Anmeldung sofort an (`entry.async_start_reauth`) | Bestätigt |
+| Schema-Prüfung der Antworten | Keine; `entity` wird vorausgesetzt | Bestätigt |
 
 ---
 
-## 6. Ejemplo de sesión sanitizada (flujo completo)
+## 6. Bereinigter Beispielablauf
 
 ```
-POST /user/login                     → 200 {entity:{access_token, refresh_token}}
+PUT  /user/refreshtokens             → 200 {entity:{access_token, refresh_token}}
 GET  /locations                      → 200 {entity:[{id:...}]}
 GET  /installations?location_id=..   → 200 {entity:[{reference:...}]}
 GET  /devices?installation_ref=..    → 200 {entity:[{reference, name}]}
-PUT  /user/refreshawscredentials     → 200 {entity:{aws_*}}        (para MQTT)
-POST /send/instruction  [status]     → 201 {msg:"Creado"}
-POST /send/instruction  [mode/temp]  → 201 {msg:"Creado"}
+PUT  /user/refreshawscredentials     → 200 {entity:{aws_*}}        (für MQTT)
+POST /send/instruction  [status]     → 201 {msg, error:[], entity:{value:[{orderId}]}}
+POST /send/instruction  [mode/temp]  → 201 {msg, error:[], entity:{value:[{orderId}]}}
 ```
