@@ -18,6 +18,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - **Inkompatibel – Werte des Modus-Sensors:** Zustände lauten `off`/`heat`/`cool`/`on` statt `OFF`/`HEAT`/`COOL`/`ON`. Das Attribut heißt `medium` (Werte `air`/`floor`/`air_and_floor`) statt `medio` (`ac`/`suelo`/`mixto`). Automationen, die auf die alten Werte prüfen, müssen angepasst werden.
 - Gerätemodell der Zonen: „Klima-Zonenregler“, des Kontogeräts: „Integration“.
 - Bestehende Entity-IDs bleiben erhalten. Bei einer Neueinrichtung erzeugt Home Assistant die IDs aus den Namen in der eingestellten Sprache (z. B. `sensor.<zone>_luftfeuchtigkeit`).
+- Code-Kommentare, Docstrings und Log-Meldungen auf Englisch statt Spanisch; Log-Meldungen ohne Emojis. Keine Änderung am Verhalten.
+- Ersatzname einer Zone ohne Namen im Konto einheitlich „Zone <Referenz>“ (bisher je nach Plattform „Zona …“ oder „Termostato …“).
 
 ### Fixed
 - **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).

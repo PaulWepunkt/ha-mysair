@@ -1,7 +1,8 @@
-"""Parsers puros para los mensajes MQTT de MySair.
+"""Pure parsers for MySair MQTT messages.
 
-Este módulo NO depende de Home Assistant a propósito: así la lógica de parseo
-del estado se puede importar y testear de forma aislada (ver docs/testing-strategy.md).
+This module deliberately does NOT depend on Home Assistant, so the state
+parsing logic can be imported and tested in isolation (see
+docs/testing-strategy.md).
 """
 
 import json
@@ -11,13 +12,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def parse_status_value(raw_value):
-    """Decodifica el campo ``value`` de un mensaje ``status``.
+    """Decode the ``value`` field of a ``status`` message.
 
-    El backend envía ``value`` como string con JSON anidado y, en ocasiones, un
-    ``;`` final. Devuelve siempre un ``dict``:
-      - si ``raw_value`` es un string con JSON válido → el objeto decodificado;
-      - si ya es un ``dict`` → se devuelve tal cual;
-      - en cualquier otro caso (JSON inválido, tipo inesperado) → ``{}``.
+    The backend sends ``value`` as a string containing nested JSON and
+    sometimes a trailing ``;``. Always returns a ``dict``:
+      - ``raw_value`` is a string with valid JSON → the decoded object;
+      - it is already a ``dict`` → returned as is;
+      - anything else (invalid JSON, unexpected type) → ``{}``.
     """
     if isinstance(raw_value, dict):
         return raw_value
@@ -33,7 +34,7 @@ def parse_status_value(raw_value):
         parsed = json.loads(cleaned)
     except (ValueError, TypeError) as err:
         _LOGGER.warning(
-            "[MySair MQTT] ⚠️ Error decodificando JSON anidado: %s -> %s...",
+            "[MySair MQTT] Failed to decode nested JSON: %s -> %s...",
             err,
             raw_value[:120],
         )
@@ -43,7 +44,7 @@ def parse_status_value(raw_value):
 
 
 def _to_float(value):
-    """Convierte a float; devuelve None si no es convertible o falta."""
+    """Convert to float; return None if missing or not convertible."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -79,14 +80,14 @@ def parse_humidity(zone):
 
 
 def parse_mode(m):
-    """Interpreta el campo ``m`` (modo, 0-5) del payload de estado.
+    """Interpret the ``m`` field (mode, 0-5) of the status payload.
 
-    Semántica CONFIRMADA desde la app oficial (ver docs/protocol-findings.md):
-      - par = calor, impar = frío
-      - AC activo si m ∈ {0,1,4,5}; suelo radiante activo si m ∈ {2,3,4,5}
+    Semantics CONFIRMED from the official app (see docs/protocol-findings.md):
+      - even = heat, odd = cool
+      - air (AC) active if m ∈ {0,1,4,5}; floor heating active if m ∈ {2,3,4,5}
 
-    Devuelve la tupla (mode_raw, is_heat, is_cool, is_ac, is_floor); todos los
-    booleanos son None si ``m`` falta o no es numérico.
+    Returns the tuple (mode_raw, is_heat, is_cool, is_ac, is_floor); all
+    booleans are None if ``m`` is missing or not numeric.
     """
     if m is None:
         return None, None, None, None, None
@@ -100,18 +101,17 @@ def parse_mode(m):
 
 
 def compute_mode_value(is_heat, is_ac, is_floor):
-    """Calcula el valor de ``m`` a enviar por el comando ``mode`` dado el
-    estado deseado (inverso de ``parse_mode``, F4 — control de suelo).
+    """Compute the ``m`` value to send with the ``mode`` command for the
+    desired state (inverse of ``parse_mode``, F4 - floor heating control).
 
-    Confirmado desde la app oficial (`docs/protocol-findings.md` §4):
-    ``base``: AC=0, Suelo=2, AC+Suelo=4 (calor); ``+1`` si frío.
+    Confirmed from the official app (`docs/protocol-findings.md` §4):
+    ``base``: air=0, floor=2, air+floor=4 (heat); ``+1`` for cool.
 
-    Si ni AC ni suelo quedarían activos (combinación que la app nunca
-    genera, ver `toggleRadiatingFloor`/`setModeHeat`), se fuerza AC=True
-    para no enviar un ``m`` nunca visto en el bundle.
-    # TODO(validar): comportamiento exacto de la app en ese caso límite no
-    confirmado; no debería alcanzarse en uso normal (siempre queda al menos
-    un medio activo).
+    If neither air nor floor would remain active (a combination the app
+    never produces, see `toggleRadiatingFloor`/`setModeHeat`), air is forced
+    on so that no ``m`` value unseen in the bundle is sent.
+    # TODO(verify): exact app behaviour in this edge case is unconfirmed; it
+    should not be reached in normal use (at least one medium stays active).
     """
     if not is_ac and not is_floor:
         is_ac = True
@@ -120,34 +120,34 @@ def compute_mode_value(is_heat, is_ac, is_floor):
 
 
 def parse_status_payload(payload):
-    """Normaliza el payload de un mensaje ``status`` a ``{"ctl", "zones"}``.
+    """Normalise the payload of a ``status`` message to ``{"ctl", "zones"}``.
 
-    Semántica de los campos de zona (CONFIRMADA desde la app oficial, ver
+    Zone field semantics (CONFIRMED from the official app, see
     docs/protocol-findings.md):
-      - ``e``  → ENCENDIDO: "0"=off, "1"=on, "2"=standby  (NO es el modo)
-      - ``m``  → MODO 0-5: par=calor, impar=frío; {0,1,4,5}=AC, {2,3,4,5}=suelo
-      - ``tr``/``tc``/``tmm``/``tmx`` → temp actual/consigna/min/max
+      - ``e``  → POWER: "0"=off, "1"=on, "2"=standby  (NOT the mode)
+      - ``m``  → MODE 0-5: even=heat, odd=cool; {0,1,4,5}=air, {2,3,4,5}=floor
+      - ``tr``/``tc``/``tmm``/``tmx`` → current/target/min/max temperature
       - humidity: ``hm`` first, ``hum`` as fallback, 0 = unknown
         (see ``parse_humidity``)
-      - capacidades: ``c``=permite calor, ``f``=permite frío, ``v``=fan, ``s``=suelo
+      - capabilities: ``c``=heat allowed, ``f``=cool allowed, ``v``=fan,
+        ``s``=floor heating
 
-    Cada zona en ``zones`` incluye: ``ctl``, ``zone_id``, ``zone_name``,
+    Each zone in ``zones`` contains: ``ctl``, ``zone_id``, ``zone_name``,
     ``temp_actual``, ``temp_target``, ``temp_min``, ``temp_max``, ``humidity``,
-    ``power`` (e crudo), ``is_on``, ``is_standby``, ``mode_raw``, ``is_heat``,
-    ``is_cool``, ``is_ac``, ``is_floor``, ``fan_mode`` y flags ``allow_*``.
+    ``power`` (raw e), ``is_on``, ``is_standby``, ``mode_raw``, ``is_heat``,
+    ``is_cool``, ``is_ac``, ``is_floor``, ``fan_mode`` and ``allow_*`` flags.
 
-    Validación (E2/E4): un ``payload`` que no sea ni siquiera un ``dict`` se
-    **rechaza** devolviendo ``None`` (en vez de un dict "vacío" que de todas
-    formas no hace nada aguas abajo). El resto de formas inesperadas (``ctl``
-    ausente, ``t`` con una forma que no es una lista, una zona sin ``rf``) se
-    degradan de forma segura como hasta ahora, pero ahora quedan
-    **logueadas** para poder depurarlas — deliberadamente no se rechazan
-    claves adicionales desconocidas del payload (permisivo ante campos
-    nuevos del backend, ver `docs/known-unknowns.md`).
+    Validation (E2/E4): a ``payload`` that is not even a ``dict`` is
+    **rejected** by returning ``None`` (instead of an "empty" dict that does
+    nothing downstream anyway). Other unexpected shapes (missing ``ctl``,
+    ``t`` that is not a list, a zone without ``rf``) degrade safely, but are
+    **logged** so they can be debugged. Unknown extra keys in the payload are
+    deliberately not rejected (tolerant of new backend fields, see
+    `docs/known-unknowns.md`).
     """
     if not isinstance(payload, dict):
         _LOGGER.warning(
-            "[MySair] status: payload no es un dict (%s), se rechaza el mensaje",
+            "[MySair] status: payload is not a dict (%s), message rejected",
             type(payload).__name__,
         )
         return None
@@ -155,14 +155,14 @@ def parse_status_payload(payload):
     ctl_ref = payload.get("ctl")
     if ctl_ref is None:
         _LOGGER.warning(
-            "[MySair] status: payload sin 'ctl', el mensaje quedará sin destinatario"
+            "[MySair] status: payload without 'ctl', message has no recipient"
         )
     parsed_value = parse_status_value(payload.get("value", ""))
 
     t_list = parsed_value.get("t", [])
     if not isinstance(t_list, list):
         _LOGGER.warning(
-            "[MySair] status: campo 't' con forma inesperada (%s), se ignora",
+            "[MySair] status: field 't' has an unexpected shape (%s), ignored",
             type(t_list).__name__,
         )
         t_list = []
@@ -173,7 +173,7 @@ def parse_status_payload(payload):
             continue
         if t.get("rf") is None:
             _LOGGER.warning(
-                "[MySair] status: zona sin 'rf' (zone_id), se generará sin identificador"
+                "[MySair] status: zone without 'rf' (zone_id), created without identifier"
             )
         power = _to_str(t.get("e", "0"))
         mode_raw, is_heat, is_cool, is_ac, is_floor = parse_mode(t.get("m"))
@@ -187,10 +187,10 @@ def parse_status_payload(payload):
                 "temp_min": _to_float(t.get("tmm")),
                 "temp_max": _to_float(t.get("tmx")),
                 "humidity": parse_humidity(t),
-                "power": power,  # e crudo: "0"/"1"/"2"
-                "is_on": power != "0",  # standby ("2") también cuenta como encendido
+                "power": power,  # raw e: "0"/"1"/"2"
+                "is_on": power != "0",  # standby ("2") also counts as on
                 "is_standby": power == "2",
-                "mode_raw": mode_raw,  # m crudo: "0".."5"
+                "mode_raw": mode_raw,  # raw m: "0".."5"
                 "is_heat": is_heat,
                 "is_cool": is_cool,
                 "is_ac": is_ac,
@@ -207,28 +207,27 @@ def parse_status_payload(payload):
 
 
 def parse_feedback_payload(payload):
-    """Normaliza el payload del topic ``.../usr/{aws_mqtt_user}/feedback``.
+    """Normalise the payload of the ``.../usr/{aws_mqtt_user}/feedback`` topic.
 
-    Confirmado desde la app oficial (ver docs/protocol-findings.md §8): el ACK
-    de una instrucción se recibe como ``{orderId, ctl, ...}`` plano sobre el
-    mismo objeto que entrega el wrapper MQTT (mismo shape que ``payload`` en
-    ``mqtt_handler._on_message``). No hay captura real de producción que lo
-    confirme (`known-unknowns` #23), así que además se prueba, como
-    alternativa defensiva, la forma anidada de ``status`` (``value`` como
-    string JSON) por si el backend envuelve también este topic así.
+    Confirmed from the official app (see docs/protocol-findings.md §8): the
+    ACK of an instruction arrives as a flat ``{orderId, ctl, ...}`` on the
+    same object delivered by the MQTT wrapper (same shape as ``payload`` in
+    ``mqtt_handler._on_message``). As a defensive fallback, the nested
+    ``status`` shape (``value`` as a JSON string) is tried as well, in case
+    the backend wraps this topic the same way (`known-unknowns` #23).
 
-    Devuelve ``{"order_id", "ctl", "raw"}``; ``order_id``/``ctl`` son ``None``
-    si no se encuentran en ninguna de las dos formas.
+    Returns ``{"order_id", "ctl", "raw"}``; ``order_id``/``ctl`` are ``None``
+    if found in neither shape.
 
-    Validación (E4): un ``payload`` que no sea un ``dict`` se rechaza
-    devolviendo ``None``. Si es un dict pero no se encuentra ``orderId``/
-    ``ctl`` en ninguna de las dos formas conocidas, se loguea (antes era
-    silencioso) pero se sigue devolviendo el dict con ``None``s, ya que la
-    forma general del mensaje sí se reconoció.
+    Validation (E4): a ``payload`` that is not a ``dict`` is rejected by
+    returning ``None``. If it is a dict but neither ``orderId`` nor ``ctl``
+    is found in either known shape, this is logged, and the dict with
+    ``None`` values is still returned, since the general message shape was
+    recognised.
     """
     if not isinstance(payload, dict):
         _LOGGER.warning(
-            "[MySair] feedback: payload no es un dict (%s), se rechaza el mensaje",
+            "[MySair] feedback: payload is not a dict (%s), message rejected",
             type(payload).__name__,
         )
         return None
@@ -245,7 +244,7 @@ def parse_feedback_payload(payload):
 
     if order_id is None and ctl is None:
         _LOGGER.warning(
-            "[MySair] feedback: no se encontró 'orderId' ni 'ctl' (ni plano ni anidado)"
+            "[MySair] feedback: neither 'orderId' nor 'ctl' found (flat or nested)"
         )
 
     return {"order_id": order_id, "ctl": ctl, "raw": payload}

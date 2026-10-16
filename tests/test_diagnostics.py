@@ -1,8 +1,8 @@
-"""Tests P2 de diagnostics.py (harness de Home Assistant, ver Dockerfile.test).
+"""P2 tests of diagnostics.py (Home Assistant harness, see Dockerfile.test).
 
-Verifica que el volcado de diagnóstico incluye el estado necesario para
-depurar (instalaciones, dispositivos, conexión MQTT) y que redacta
-credenciales/tokens antes de exponerlos.
+Checks that the diagnostics dump contains the state needed for debugging
+(installations, devices, MQTT connection) and that it redacts
+credentials/tokens before exposing them.
 """
 
 import pytest
@@ -74,7 +74,7 @@ async def test_diagnostics_redacts_sensitive_fields(hass, monkeypatch):
     assert result["api"]["aws_secret_access_key"] == REDACTED
     assert result["api"]["aws_security_token"] == REDACTED
     assert result["api"]["aws_mqtt_user"] == REDACTED
-    # Campos no sensibles, útiles para depurar, se conservan sin redactar.
+    # Non-sensitive fields useful for debugging are kept unredacted.
     assert result["api"]["aws_mqtt_host"] == "host.iot.eu-west-1.amazonaws.com"
     assert result["api"]["aws_base_topic"] == "mysair/web0000"
 
@@ -94,7 +94,7 @@ async def test_diagnostics_includes_installations_devices_and_mqtt_state(
     assert result["devices"] == {"INST_A": [{"reference": "DEV_1", "name": "Salon"}]}
     assert result["mqtt"]["connected"] is False
     assert result["mqtt"]["reconnect_attempt"] == 0
-    # Observabilidad D3/D4: sin mensajes ni reconexiones aún tras el setup inicial.
+    # Observability D3/D4: no messages or reconnects yet after the initial setup.
     assert result["mqtt"]["last_message_at"] is None
     assert result["mqtt"]["total_reconnects"] == 0
     assert result["mqtt"]["parse_strict_count"] == 0

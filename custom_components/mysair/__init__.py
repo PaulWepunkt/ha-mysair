@@ -28,7 +28,7 @@ STOP_INSTALLATION_SCHEMA = vol.Schema({vol.Required(ATTR_INSTALLATION_REF): str}
 def _persist_refresh_token(
     hass: HomeAssistant, entry: ConfigEntry, refresh_token
 ) -> None:
-    """Guarda el refresh_token si ha rotado (cada renovación invalida el anterior)."""
+    """Persist the refresh_token if it rotated (every renewal invalidates the previous one)."""
     if not refresh_token or refresh_token == entry.data.get("refresh_token"):
         return
     hass.config_entries.async_update_entry(
@@ -39,16 +39,15 @@ def _persist_refresh_token(
 def _cleanup_stale_zone_devices(
     hass: HomeAssistant, entry: ConfigEntry, all_devices: dict
 ) -> None:
-    """Elimina dispositivos (y sus entidades) de zonas que ya no existen.
+    """Remove devices (and their entities) of zones that no longer exist.
 
-    Cambio de topología entre reinicios (zona eliminada en la cuenta MySair):
-    Home Assistant no borra solo las entidades que una integración deja de
-    crear (ver docs/testing-strategy.md) — quedan huérfanas para siempre si
-    nadie las limpia. Cada zona tiene su propio dispositivo identificado por
-    ``(DOMAIN, f"{inst_ref}_{device_id}")`` (ver ``device_info`` en
-    climate.py/sensor.py/switch.py); el dispositivo de cuenta del sensor de
-    conexión MQTT usa ``entry.entry_id`` como identificador y nunca se toca
-    aquí, ya que no es una zona.
+    Topology change between restarts (zone removed from the MySair account):
+    Home Assistant does not remove entities that an integration stops
+    creating on its own (see docs/testing-strategy.md) - they stay orphaned
+    forever unless cleaned up. Every zone has its own device identified by
+    ``(DOMAIN, f"{inst_ref}_{device_id}")`` (see ``device.py``); the account
+    device of the cloud connection sensor uses ``entry.entry_id`` as its
+    identifier and is never touched here, since it is not a zone.
     """
     current_zone_ids = {
         f"{inst_ref}_{dev.get('reference') or dev.get('rf') or dev.get('id')}"
@@ -65,31 +64,31 @@ def _cleanup_stale_zone_devices(
             if domain == DOMAIN
         }
         if entry.entry_id in zone_ids:
-            continue  # dispositivo de cuenta (sensor de conexión MQTT), no es una zona
+            continue  # account device (cloud connection sensor), not a zone
         if not zone_ids & current_zone_ids:
             _LOGGER.info(
-                f"[MySair] 🧹 Eliminando dispositivo huérfano (zona ya no existe): {zone_ids}"
+                f"[MySair] Removing orphaned device (zone no longer exists): {zone_ids}"
             )
-            # Desde HA 2026.8 un dispositivo pertenece a una sola config entry,
-            # así que "quitarlo de la entry" dejó de tener sentido y
-            # `async_update_device(remove_config_entry_id=...)` está deprecado
-            # (se elimina en 2027.8). El equivalente ahora es borrarlo.
+            # Since HA 2026.8 a device belongs to a single config entry, so
+            # "removing it from the entry" no longer makes sense and
+            # `async_update_device(remove_config_entry_id=...)` is deprecated
+            # (removed in 2027.8). The equivalent now is deleting it.
             device_registry.async_remove_device(device_entry.id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-    """Configura la integración MySair."""
+    """Set up the MySair integration."""
     email = entry.data.get("email")
     refresh_token = entry.data.get("refresh_token")
     if not email or not refresh_token:
         raise ConfigEntryAuthFailed(
-            "Faltan credenciales; reautentica la integración MySair."
+            "Missing credentials; reauthenticate the MySair integration."
         )
 
-    _LOGGER.info(f"[MySair] 🔐 Autenticando usuario {email}")
+    _LOGGER.info(f"[MySair] Authenticating user {email}")
 
     def _on_tokens_refreshed(access_token, refresh_token_value):
-        # Se invoca desde un hilo ejecutor: hay que volver al loop para tocar hass.
+        # Called from an executor thread: switch back to the loop to touch hass.
         hass.loop.call_soon_threadsafe(
             _persist_refresh_token, hass, entry, refresh_token_value
         )
@@ -97,37 +96,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     api = MySairAPI(email, on_tokens_refreshed=_on_tokens_refreshed)
     api.refresh_token_value = refresh_token
 
-    # --- SESIÓN: renovar tokens a partir del refresh_token guardado (A6: no se
-    # persiste ni se usa password tras la configuración inicial). ---
+    # --- SESSION: renew tokens from the stored refresh_token (A6: the password
+    # is neither stored nor used after the initial setup). ---
     try:
         await hass.async_add_executor_job(api.refresh_tokens)
     except MySairAuthError as err:
         raise ConfigEntryAuthFailed(
-            f"Sesión MySair inválida o expirada: {err}"
+            f"MySair session invalid or expired: {err}"
         ) from err
     except MySairConnectionError as err:
         raise ConfigEntryNotReady(f"No se pudo conectar con MySair: {err}") from err
 
-    # Migración: entradas creadas antes de A6 guardaban password/access_token
-    # en claro; ya no se usan, se eliminan de la config entry en el primer
-    # arranque correcto tras la actualización.
+    # Migration: entries created before A6 stored password/access_token in
+    # plain text; they are no longer used and are removed from the config
+    # entry on the first successful startup after the update.
     stale_keys = {"password", "access_token"} & entry.data.keys()
     if stale_keys:
         hass.config_entries.async_update_entry(
             entry, data={k: v for k, v in entry.data.items() if k not in stale_keys}
         )
 
-    # --- ESTRUCTURA: Locations → Installations → Devices ---
-    # Los métodos de descubrimiento propagan MySairAuthError/MySairConnectionError
-    # (antes devolvían [] ante cualquier fallo, lo que convertía una sesión
-    # muerta en "cuenta vacía" → ConfigEntryNotReady → bucle de reintentos sin
-    # reauth). Una lista vacía aquí ya solo significa cuenta sin datos.
+    # --- STRUCTURE: Locations → Installations → Devices ---
+    # The discovery methods propagate MySairAuthError/MySairConnectionError
+    # (they used to return [] on any failure, which turned a dead session into
+    # an "empty account" → ConfigEntryNotReady → retry loop without reauth).
+    # An empty list here now only means an account without data.
     try:
         locations = await hass.async_add_executor_job(api.get_locations)
         if not locations:
-            raise ConfigEntryNotReady(
-                "No se encontraron ubicaciones en la cuenta MySair."
-            )
+            raise ConfigEntryNotReady("No locations found in the MySair account.")
 
         first_loc = locations[0]
         location_id = first_loc["id"]
@@ -135,12 +132,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             api.get_installations, location_id
         )
         if not installations:
-            raise ConfigEntryNotReady(
-                "No se encontraron instalaciones en la ubicación MySair."
-            )
+            raise ConfigEntryNotReady("No installations found in the MySair location.")
 
         _LOGGER.info(
-            f"[MySair] 🏠 Instalaciones detectadas: {[i['reference'] for i in installations]}"
+            f"[MySair] Installations found: {[i['reference'] for i in installations]}"
         )
 
         all_devices = {}
@@ -151,18 +146,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             devices = await hass.async_add_executor_job(api.get_devices, ref)
             all_devices[ref] = devices
             _LOGGER.info(
-                f"[MySair] 📟 Instalación {ref}: {len(devices)} termostatos encontrados"
+                f"[MySair] Installation {ref}: {len(devices)} thermostats found"
             )
     except MySairAuthError as err:
         raise ConfigEntryAuthFailed(
-            f"Sesión MySair inválida durante el descubrimiento: {err}"
+            f"MySair session invalid during discovery: {err}"
         ) from err
     except MySairConnectionError as err:
         raise ConfigEntryNotReady(f"No se pudo conectar con MySair: {err}") from err
 
     _cleanup_stale_zone_devices(hass, entry, all_devices)
 
-    # Guardar datos en memoria global
+    # Store runtime data
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
@@ -172,23 +167,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         "coordinator": None,
     }
 
-    # --- CALLBACK PARA MQTT (con parseo de mensajes status) ---
+    # --- MQTT CALLBACK (parses status messages) ---
     def mqtt_message_callback(data):
-        """Procesa mensajes entrantes desde AWS IoT."""
+        """Process incoming messages from AWS IoT."""
         try:
             topic = data.get("topic", "")
             payload = data.get("payload", {})
-            _LOGGER.debug(f"[MySair MQTT] 📩 {topic} -> {payload}")
+            _LOGGER.debug(f"[MySair MQTT] {topic} -> {payload}")
 
-            # Si el mensaje es de tipo "status", lo parseamos
+            # Parse "status" messages
             if topic.endswith("/status"):
                 parsed_data = parse_status_payload(payload)
-                # E4: un payload que no es ni siquiera un dict se rechaza
-                # (parse_status_payload devuelve None) — no se dispara el
-                # evento en vez de propagar un valor vacío sin sentido.
+                # E4: a payload that is not even a dict is rejected
+                # (parse_status_payload returns None) - no event is fired
+                # instead of propagating a meaningless empty value.
                 if parsed_data is None:
                     _LOGGER.warning(
-                        f"[MySair MQTT] ⛔ Payload de status rechazado (forma inesperada): {topic}"
+                        f"[MySair MQTT] Status payload rejected (unexpected shape): {topic}"
                     )
                     return
                 hass.loop.call_soon_threadsafe(
@@ -196,19 +191,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     f"{DOMAIN}_update",
                     {"topic": topic, "data": parsed_data},
                 )
-                _LOGGER.debug(f"[MySair MQTT] 🧩 Estado parseado: {parsed_data}")
+                _LOGGER.debug(f"[MySair MQTT] Parsed state: {parsed_data}")
 
-            # Confirmación (ACK) de una instrucción enviada por HTTP (E7,
-            # docs/protocol-findings.md §8). Evento propio, no mysair_update.
+            # Acknowledgement (ACK) of an instruction sent over HTTP (E7,
+            # docs/protocol-findings.md §8). Separate event, not mysair_update.
             elif topic.endswith("/feedback"):
                 feedback = parse_feedback_payload(payload)
                 if feedback is None:
                     _LOGGER.warning(
-                        f"[MySair MQTT] ⛔ Payload de feedback rechazado (forma inesperada): {topic}"
+                        f"[MySair MQTT] Feedback payload rejected (unexpected shape): {topic}"
                     )
                     return
                 _LOGGER.debug(
-                    f"[MySair MQTT] ✅ Confirmación recibida: orderId={feedback['order_id']} "
+                    f"[MySair MQTT] Confirmation received: orderId={feedback['order_id']} "
                     f"ctl={feedback['ctl']}"
                 )
                 hass.loop.call_soon_threadsafe(
@@ -218,7 +213,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 )
 
             else:
-                # Otros mensajes (no status)
+                # Other messages (not status)
                 hass.loop.call_soon_threadsafe(
                     hass.bus.async_fire,
                     f"{DOMAIN}_update",
@@ -226,23 +221,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 )
 
         except Exception as e:
-            _LOGGER.error(f"[MySair MQTT] ❌ Error en callback: {e}")
+            _LOGGER.error(f"[MySair MQTT] Error in callback: {e}")
 
-    # --- REAUTH EN CALIENTE ---
-    # La sesión puede morir con la integración ya arrancada (MySair invalida el
-    # refresh_token en servidor: cierre de sesión desde la app oficial, cambio
-    # de contraseña, limpieza de tokens antiguos). Sin esto nadie se enteraba
-    # hasta el siguiente reinicio de HA, porque tanto el hilo MQTT como la
-    # tarea periódica reintentan en silencio para siempre.
+    # --- LIVE REAUTH ---
+    # The session can die while the integration is running (MySair invalidates
+    # the refresh_token on the server: sign-out from the official app,
+    # password change, cleanup of old tokens). Without this nobody noticed
+    # until the next HA restart, because both the MQTT thread and the
+    # periodic task retry silently forever.
     def _request_reauth():
-        """Pide a HA que abra el flujo de reauth (desde cualquier hilo).
+        """Ask HA to start the reauth flow (from any thread).
 
-        ``async_start_reauth`` ya deduplica si hay un flujo de reauth o de
-        reconfiguración abierto, así que no hace falta control propio.
+        ``async_start_reauth`` already deduplicates if a reauth or reconfigure
+        flow is open, so no own bookkeeping is needed.
         """
         hass.loop.call_soon_threadsafe(entry.async_start_reauth, hass)
 
-    # --- CLIENTE MQTT ---
+    # --- MQTT CLIENT ---
     mqtt_client = MySairMQTTClient(
         api,
         installation_refs,
@@ -251,28 +246,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
     hass.data[DOMAIN][entry.entry_id]["mqtt"] = mqtt_client
 
-    # Lanzar el hilo MQTT sin bloquear el loop
+    # Start the MQTT thread without blocking the loop
     await hass.async_add_executor_job(mqtt_client.start)
 
-    # --- COORDINADOR (C1): redistribuye mysair_update por zona en vez de que
-    # cada entidad repita el mismo filtrado de topic/ctl/zone_id (ver
-    # coordinator.py). Se arranca antes de las plataformas para que ya esté
-    # escuchando cuando las entidades se den de alta. ---
+    # --- COORDINATOR (C1): dispatches mysair_update per zone instead of every
+    # entity repeating the same topic/ctl/zone_id filtering (see
+    # coordinator.py). Started before the platforms so it is already
+    # listening when the entities are added. ---
     coordinator = MySairCoordinator(hass, installation_refs)
     coordinator.start()
     hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 
-    # --- PLATAFORMAS ---
+    # --- PLATFORMS ---
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _LOGGER.info("[MySair] ✅ Plataformas cargadas correctamente")
+    _LOGGER.info("[MySair] Platforms loaded")
 
-    # --- REFRESCO AUTOMÁTICO DE STATUS ---
+    # --- PERIODIC STATUS REFRESH ---
     async def refresh_status_periodic():
-        """Cada 2 minutos solicita un 'status' de respaldo a todas las instalaciones.
+        """Request a fallback 'status' from all installations every 2 minutes.
 
-        El estado en tiempo real llega por MQTT; este POST solo fuerza un sync
-        periódico por si se pierde algún mensaje.
+        The real-time state arrives over MQTT; this POST only forces a periodic
+        sync in case a message gets lost.
         """
         while True:
             try:
@@ -280,29 +275,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     await hass.async_add_executor_job(
                         api.send_installation_command, ref, "status"
                     )
-                    _LOGGER.debug(
-                        f"[MySair] 🔁 Solicitud de estado enviada a instalación {ref}"
-                    )
+                    _LOGGER.debug(f"[MySair] Status request sent to installation {ref}")
             except MySairAuthError as e:
                 _LOGGER.error(
-                    f"[MySair] 🔑 Sesión inválida, se requiere reautenticación: {e}"
+                    f"[MySair] Session invalid, reauthentication required: {e}"
                 )
                 _request_reauth()
             except Exception as e:
-                _LOGGER.warning(
-                    f"[MySair] ⚠️ Error al enviar instrucción de estado: {e}"
-                )
-            await asyncio.sleep(120)  # 2 minutos
+                _LOGGER.warning(f"[MySair] Failed to send status request: {e}")
+            await asyncio.sleep(120)  # 2 minutes
 
-    # Lanzar la tarea periódica ligada al ciclo de vida de la entrada:
-    # Home Assistant la cancela automáticamente durante el unload.
+    # Start the periodic task bound to the entry lifecycle:
+    # Home Assistant cancels it automatically on unload.
     entry.async_create_background_task(
         hass, refresh_status_periodic(), name="mysair_status_refresh"
     )
 
-    # --- SERVICIO mysair.stop_installation (F5) ---
-    # Compartido por todas las config entries del dominio: se registra una
-    # sola vez y se retira cuando se descarga la última entrada.
+    # --- SERVICE mysair.stop_installation (F5) ---
+    # Shared by all config entries of the domain: registered once and
+    # removed when the last entry is unloaded.
     if not hass.services.has_service(DOMAIN, SERVICE_STOP_INSTALLATION):
 
         async def _async_handle_stop_installation(call: ServiceCall) -> None:
@@ -317,11 +308,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         )
                     except Exception as e:
                         raise HomeAssistantError(
-                            f"Error al detener la instalación {installation_ref}: {e}"
+                            f"Failed to stop installation {installation_ref}: {e}"
                         ) from e
                     return
             raise ServiceValidationError(
-                f"Instalación '{installation_ref}' no encontrada en ninguna cuenta MySair configurada."
+                f"Installation '{installation_ref}' not found in any configured MySair account."
             )
 
         hass.services.async_register(
@@ -335,15 +326,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Descarga la integración MySair y libera recursos (MQTT, tareas, estado).
+    """Unload the MySair integration and release resources (MQTT, tasks, state).
 
-    Orden de cierre: primero se descargan las plataformas (las entidades se
-    desconectan del coordinador), después se detiene el coordinador y el
-    cliente MQTT, y por último se limpia el estado en memoria. La tarea
-    periódica se cancela sola por estar creada con
+    Shutdown order: first the platforms are unloaded (entities disconnect
+    from the coordinator), then the coordinator and the MQTT client are
+    stopped, and finally the runtime state is cleared. The periodic task is
+    cancelled automatically because it was created with
     entry.async_create_background_task.
     """
-    _LOGGER.info("[MySair] 🔌 Deteniendo integración y cerrando sesiones...")
+    _LOGGER.info("[MySair] Stopping integration and closing sessions...")
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
@@ -355,8 +346,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             mqtt_client = data.get("mqtt")
             if mqtt_client:
                 await hass.async_add_executor_job(mqtt_client.stop)
-        # Servicio compartido por todas las entradas: se retira solo cuando
-        # se descarga la última (F5).
+        # Service shared by all entries: only removed when the last one is
+        # unloaded (F5).
         if not hass.data[DOMAIN]:
             hass.services.async_remove(DOMAIN, SERVICE_STOP_INSTALLATION)
 

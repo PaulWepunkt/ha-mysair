@@ -20,12 +20,12 @@ REAUTH_SCHEMA = vol.Schema({vol.Required("password"): str})
 
 
 class MySairConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Flujo de configuración para la integración MySair."""
+    """Config flow for the MySair integration."""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
-        """Primer paso del flujo de configuración (inicio de sesión)."""
+        """First step of the config flow (sign-in)."""
         errors = {}
 
         if user_input is not None:
@@ -35,30 +35,28 @@ class MySairConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             api = MySairAPI(email, password)
 
             try:
-                # Ejecuta el login de forma segura en un hilo (sin bloquear el bucle principal)
+                # Run the login in an executor thread (does not block the event loop)
                 await self.hass.async_add_executor_job(api.login)
             except MySairAuthError:
-                _LOGGER.error(
-                    "[MySair ConfigFlow] ❌ Login fallido: credenciales inválidas."
-                )
+                _LOGGER.error("[MySair ConfigFlow] Login failed: invalid credentials.")
                 errors["base"] = "invalid_auth"
             except MySairConnectionError as e:
                 _LOGGER.error(
-                    f"[MySair ConfigFlow] ❌ Error conectando con MySair API: {e}"
+                    f"[MySair ConfigFlow] Could not connect to the MySair API: {e}"
                 )
                 errors["base"] = "cannot_connect"
             except Exception as e:
-                _LOGGER.exception(f"[MySair ConfigFlow] ❌ Error inesperado: {e}")
+                _LOGGER.exception(f"[MySair ConfigFlow] Unexpected error: {e}")
                 errors["base"] = "unknown"
             else:
-                _LOGGER.info("[MySair ConfigFlow] ✅ Login correcto para %s", email)
+                _LOGGER.info("[MySair ConfigFlow] Login successful for %s", email)
 
                 await self.async_set_unique_id(email.lower())
                 self._abort_if_unique_id_configured()
 
-                # No se guarda el password: solo el refresh_token, usado para
-                # renovar la sesión en cada arranque sin credenciales en claro
-                # (ver docs/security-and-privacy.md §3).
+                # The password is not stored: only the refresh_token, which
+                # renews the session on every startup without plain-text
+                # credentials (see docs/security-and-privacy.md §3).
                 return self.async_create_entry(
                     title="MySair",
                     data={
@@ -74,11 +72,11 @@ class MySairConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reauth(self, entry_data) -> ConfigFlowResult:
-        """Se dispara cuando la sesión guardada ya no es válida (ConfigEntryAuthFailed)."""
+        """Triggered when the stored session is no longer valid (ConfigEntryAuthFailed)."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input=None) -> ConfigFlowResult:
-        """Pide la contraseña de nuevo para restablecer el refresh_token."""
+        """Ask for the password again to restore the refresh_token."""
         errors = {}
         reauth_entry = self._get_reauth_entry()
 
@@ -93,18 +91,18 @@ class MySairConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except MySairConnectionError as e:
                 _LOGGER.error(
-                    f"[MySair ConfigFlow] ❌ Error conectando con MySair API: {e}"
+                    f"[MySair ConfigFlow] Could not connect to the MySair API: {e}"
                 )
                 errors["base"] = "cannot_connect"
             except Exception as e:
                 _LOGGER.exception(
-                    f"[MySair ConfigFlow] ❌ Error inesperado en reauth: {e}"
+                    f"[MySair ConfigFlow] Unexpected error during reauth: {e}"
                 )
                 errors["base"] = "unknown"
             else:
-                # La cuenta no puede cambiar al reautenticar: el email sale de
-                # la entry existente, pero se comprueba igualmente para que un
-                # backend que devolviera otra identidad no reasigne la entry.
+                # The account cannot change on reauth: the email comes from the
+                # existing entry, but it is still checked so that a backend
+                # returning another identity cannot reassign the entry.
                 await self.async_set_unique_id(email.lower())
                 self._abort_if_unique_id_mismatch(reason="account_mismatch")
 

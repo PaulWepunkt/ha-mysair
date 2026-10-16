@@ -1,24 +1,24 @@
 DOMAIN = "mysair"
 
-# Tiempo de espera de confirmación (ACK) de un comando vía topic feedback
-# antes de avisar en logs. Valor confirmado desde la app oficial
-# (VUE_APP_OUTSERVICE_MILISECOND=5000, ver docs/protocol-findings.md §6b).
+# Time to wait for a command acknowledgement (ACK) on the feedback topic
+# before logging a warning. Value taken from the official app
+# (VUE_APP_OUTSERVICE_MILISECOND=5000, see docs/protocol-findings.md §6b).
 FEEDBACK_TIMEOUT_SECONDS = 5
 
-# Antigüedad máxima de un status MQTT antes de marcar la entidad como no
-# disponible (C5). 3x el intervalo del refresco periódico de respaldo (120 s,
-# __init__.py) para no dar falsos "no disponible" por jitter normal.
+# Maximum age of an MQTT status before an entity is marked unavailable (C5).
+# Three times the interval of the periodic fallback refresh (120 s,
+# __init__.py), so normal jitter does not cause false "unavailable" states.
 MQTT_STALE_AFTER_SECONDS = 360
 
-# Atributos comunes
+# Common attributes
 ATTR_TARGET_TEMP = "target_temperature"
 ATTR_CURRENT_TEMP = "current_temperature"
 ATTR_MODE = "mode"
 ATTR_HVAC_STATE = "hvac_action"
 
-# Intervalos por defecto
-SCAN_INTERVAL = 60  # segundos
+# Default intervals
+SCAN_INTERVAL = 60  # seconds
 
-# Servicio mysair.stop_installation (F5)
+# Service mysair.stop_installation (F5)
 SERVICE_STOP_INSTALLATION = "stop_installation"
 ATTR_INSTALLATION_REF = "installation_ref"

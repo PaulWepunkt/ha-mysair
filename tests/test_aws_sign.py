@@ -1,7 +1,8 @@
-"""Tests P0 de la firma de URL AWS SigV4 (sin Home Assistant).
+"""P0 tests of the AWS SigV4 URL signature (no Home Assistant).
 
-Requiere `requests` (api lo importa) y `freezegun` para fijar el reloj.
-No valida contra AWS: solo la estructura y el determinismo de la firma.
+Requires `requests` (imported by api) and `freezegun` to freeze the clock.
+Does not validate against AWS: only the structure and determinism of the
+signature.
 """
 
 import re
@@ -12,7 +13,7 @@ import pytest
 pytest.importorskip("requests")
 freezegun = pytest.importorskip("freezegun")
 
-from api import MySairAPI  # noqa: E402 (deliberado: necesita importorskip antes)
+from api import MySairAPI  # noqa: E402 (deliberate: needs importorskip first)
 
 
 FIXED = "2026-07-19T10:00:00Z"
@@ -36,11 +37,11 @@ def test_signed_url_structure():
     assert qs["X-Amz-Algorithm"] == ["AWS4-HMAC-SHA256"]
     assert qs["X-Amz-SignedHeaders"] == ["host"]
     assert qs["X-Amz-Security-Token"] == ["TESTTOKEN"]
-    # Credential incluye el scope con region y servicio iotdevicegateway
+    # Credential includes the scope with region and service iotdevicegateway
     cred = qs["X-Amz-Credential"][0]
     assert "TESTKEYID/" in cred
     assert "eu-west-1/iotdevicegateway/aws4_request" in cred
-    # La firma es un hex SHA256 de 64 caracteres
+    # The signature is a 64-character SHA256 hex string
     assert re.fullmatch(r"[0-9a-f]{64}", qs["X-Amz-Signature"][0])
 
 

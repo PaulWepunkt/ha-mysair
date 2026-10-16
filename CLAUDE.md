@@ -131,8 +131,8 @@ Los tests y la documentación están en la raíz del repo.
 - MQTT corre en **hilo daemon**; para volver al loop se usa `hass.loop.call_soon_threadsafe(...)`.
 - Entidades se comunican con los datos vía el **event bus** (`mysair_update`), no directamente con el cliente MQTT.
 - Handlers de evento decorados con `@callback`.
-- Logs con prefijos `[MySair ...]` y emojis (estilo existente; mantener consistencia si editas cerca).
-- Español en comentarios y mensajes de log.
+- Log-Meldungen mit Präfix `[MySair ...]`, ohne Emojis.
+- Code-Kommentare, Docstrings und Log-Meldungen auf Englisch.
 
 ---
 
@@ -148,7 +148,7 @@ Los tests y la documentación están en la raíz del repo.
 1. **No hacer peticiones a producción.** No ejecutar `login`, `send_instruction`, ni conectar MQTT contra `api.mysair.es` / AWS IoT reales durante el desarrollo asistido.
 2. **No cambiar el estado de una instalación real.** Los comandos (`mode`, `temp`, `power`) afectan hardware físico.
 3. **Secretos:** no imprimir ni commitear `password`, `access_token`, `refresh_token`, `aws_secret_access_key`, `aws_security_token`, ni URLs firmadas. Ver `docs/security-and-privacy.md`.
-4. **Protocolo no documentado:** no inventar campos ni endpoints. Marcar suposiciones con `# TODO(validar)` y consultar `docs/known-unknowns.md`.
+4. **Protocolo no documentado:** no inventar campos ni endpoints. Marcar suposiciones con `# TODO(verify)` y consultar `docs/known-unknowns.md`.
 5. **Codificación de modo sin confirmar** (comando `0/1` vs status `0/1/2`): NO cambiar la lógica de modo sin resolver `known-unknowns` #1/#2/#4.
 
 ---

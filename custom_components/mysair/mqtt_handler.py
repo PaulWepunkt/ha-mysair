@@ -12,17 +12,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def log(msg, level="info"):
-    """Logger con timestamp legible."""
+    """Logger with a readable timestamp."""
     now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
     getattr(_LOGGER, level.lower())(f"{now} {msg}")
 
 
 def _redact_client_id(client_id):
-    """Enmascara el ``access_key`` embebido en el clientId antes de loguearlo (D2).
+    """Mask the ``access_key`` embedded in the clientId before logging it (D2).
 
-    ``build_client_id`` construye ``mqtt-client_<accessKey>_<ts>_<rand>``; el
-    access key ya se trata como sensible en ``diagnostics.py`` (TO_REDACT_API),
-    así que no debería aparecer en claro en los logs tampoco.
+    ``build_client_id`` builds ``mqtt-client_<accessKey>_<ts>_<rand>``; the
+    access key is already treated as sensitive in ``diagnostics.py``
+    (TO_REDACT_API), so it must not appear in plain text in the logs either.
     """
     parts = client_id.split("_")
     if len(parts) < 4 or parts[0] != "mqtt-client":
@@ -31,7 +31,7 @@ def _redact_client_id(client_id):
 
 
 # ==========================================================
-# 🔧 Utilidades MQTT (idénticas al script funcional)
+# MQTT helpers
 # ==========================================================
 def encode_varint(x):
     encoded = b""
@@ -47,11 +47,11 @@ def encode_varint(x):
 
 
 def decode_varint(data, offset=0):
-    """Decodifica un entero de longitud variable estilo MQTT (remaining length).
+    """Decode an MQTT-style variable length integer (remaining length).
 
-    Inverso de ``encode_varint``. Devuelve ``(valor, nueva_posición)``, o
-    ``(None, offset)`` si los bytes disponibles no forman un varint válido
-    (incompleto o de más de 4 bytes, el máximo permitido por MQTT 3.1.1).
+    Inverse of ``encode_varint``. Returns ``(value, new_position)``, or
+    ``(None, offset)`` if the available bytes do not form a valid varint
+    (incomplete or longer than 4 bytes, the maximum allowed by MQTT 3.1.1).
     """
     multiplier = 1
     value = 0
@@ -70,30 +70,30 @@ def decode_varint(data, offset=0):
     return value, pos
 
 
-# Cap defensivo (E2): si el buffer de recepción crece sin completar un
-# paquete (stream corrupto/desincronizado), se descarta en vez de acumular
-# memoria indefinidamente.
+# Defensive cap (E2): if the receive buffer grows without completing a packet
+# (corrupt/desynchronised stream), it is discarded instead of accumulating
+# memory indefinitely.
 MAX_RECV_BUFFER_SIZE = 65536
 
 
 class FrameState:
-    """Resultado de `_next_packet_length` cuando no hay una longitud útil."""
+    """Result of `_next_packet_length` when no usable length is available."""
 
-    INCOMPLETE = "incomplete"  # faltan bytes; puede completarse con más datos
-    MALFORMED = "malformed"  # el varint de longitud MQTT nunca podrá completarse
+    INCOMPLETE = "incomplete"  # bytes missing; may complete with more data
+    MALFORMED = "malformed"  # the MQTT length varint can never complete
 
 
 def _next_packet_length(buffer):
-    """Longitud total (cabecera fija + varint + remaining_length) del primer
-    paquete MQTT al inicio de ``buffer``, o un ``FrameState`` si aún no se
-    puede determinar (E2, manejo de frames parciales/multi-paquete).
+    """Total length (fixed header + varint + remaining_length) of the first
+    MQTT packet at the start of ``buffer``, or a ``FrameState`` if it cannot
+    be determined yet (E2, handling of partial/multi-packet frames).
 
-    Distingue "incompleto" (esperar más bytes) de "malformado" (el varint
-    de longitud nunca terminará, más datos no ayudan): ``decode_varint``
-    devuelve ``(None, offset)`` en ambos casos, pero solo puede agotar los 4
-    bytes de continuación máximos de MQTT 3.1.1 si ya había al menos 4 bytes
-    disponibles tras la cabecera fija — con menos, siempre es por falta de
-    datos.
+    Distinguishes "incomplete" (wait for more bytes) from "malformed" (the
+    length varint will never terminate, more data does not help):
+    ``decode_varint`` returns ``(None, offset)`` in both cases, but it can
+    only exhaust the 4 continuation bytes allowed by MQTT 3.1.1 if at least
+    4 bytes were available after the fixed header - with fewer, it is always
+    due to missing data.
     """
     if len(buffer) < 1:
         return FrameState.INCOMPLETE
@@ -104,22 +104,21 @@ def _next_packet_length(buffer):
 
 
 def parse_mqtt_publish(message):
-    """Decodifica un frame PUBLISH MQTT real: cabecera fija + Topic Name + payload.
+    """Decode a real MQTT PUBLISH frame: fixed header + Topic Name + payload.
 
-    Confirmado por inferencia cruzada de varias capturas reales de producción
-    (2026-07-20, ver docs/known-unknowns.md #6): el "carácter fantasma" que
-    aparecía antes del topic en los logs (un ``(`` para topics de 40
-    caracteres, nada visible para uno de 31) no era parte del topic ni un
-    envoltorio de la app — es el byte bajo del campo de longitud de 2 bytes
-    (big-endian) que precede al Topic Name en cualquier PUBLISH MQTT estándar,
-    que solo resulta visible como texto cuando coincide con un carácter ASCII
-    imprimible. Nuestras suscripciones piden QoS 0 (``build_mqtt_subscribe``),
-    así que el PUBLISH no lleva Packet Identifier.
+    The "ghost character" that showed up before the topic in logs (a ``(``
+    for 40-character topics, nothing visible for a 31-character one, see
+    docs/known-unknowns.md #6) was neither part of the topic nor an app
+    wrapper - it is the low byte of the 2-byte (big-endian) length field
+    that precedes the Topic Name in every standard MQTT PUBLISH, and it is
+    only visible as text when it happens to be a printable ASCII character.
+    Our subscriptions request QoS 0 (``build_mqtt_subscribe``), so the
+    PUBLISH carries no Packet Identifier.
 
-    Devuelve ``(topic, payload_bytes)``, o ``(None, None)`` si el mensaje no
-    tiene la forma esperada — el llamador debe caer entonces a la heurística
-    de texto (``_on_message``), ya que no hay certeza total sobre casos límite
-    sin una captura de bytes en crudo.
+    Returns ``(topic, payload_bytes)``, or ``(None, None)`` if the message
+    does not have the expected shape - the caller must then fall back to the
+    text heuristic (``_on_message``), since edge cases are not fully certain
+    without a raw byte capture.
     """
     if not message or (message[0] & 0xF0) != 0x30:
         return None, None
@@ -142,34 +141,34 @@ def parse_mqtt_publish(message):
     pos += topic_len
 
     if not topic or "{" in topic or not topic.isprintable():
-        return None, None  # sanity check: no confiar en un topic con pinta rara
+        return None, None  # sanity check: do not trust an odd-looking topic
 
     qos = (message[0] >> 1) & 0x03
     if qos > 0:
         if len(message) < pos + 2:
             return None, None
-        pos += 2  # Packet Identifier, no se usa (nuestras suscripciones piden QoS 0)
+        pos += 2  # Packet Identifier, unused (our subscriptions request QoS 0)
 
     return topic, message[pos:]
 
 
 def _extract_json(text):
-    """Extrae y parsea el primer objeto JSON `{...}` de un texto.
+    """Extract and parse the first JSON object `{...}` from a text.
 
-    Usado tanto por el método estricto como por el heurístico de fallback en
-    ``_on_message``. Devuelve ``(data, start)``, donde ``start`` es la
-    posición del primer ``{`` (útil para el heurístico, que la usa para
-    deducir el topic del prefijo).
+    Used by both the strict method and the fallback heuristic in
+    ``_on_message``. Returns ``(data, start)``, where ``start`` is the
+    position of the first ``{`` (useful for the heuristic, which uses it to
+    derive the topic from the prefix).
     """
     start = text.find("{")
     end = text.rfind("}") + 1
     if start == -1 or end == 0:
-        raise ValueError("No se encontró JSON válido en el mensaje recibido.")
+        raise ValueError("No valid JSON found in the received message.")
     return json.loads(text[start:end]), start
 
 
 def build_mqtt_connect(client_id, username, password):
-    """Construye el paquete CONNECT MQTT."""
+    """Build the MQTT CONNECT packet."""
     protocol_name = b"\x00\x04MQTT"
     protocol_level = b"\x04"
     connect_flags = b"\xc2"  # CleanSession + Username + Password
@@ -191,7 +190,7 @@ def build_mqtt_connect(client_id, username, password):
 
 
 def build_mqtt_subscribe(packet_id, topic):
-    """Construye el paquete SUBSCRIBE MQTT."""
+    """Build the MQTT SUBSCRIBE packet."""
     variable_header = struct.pack("!H", packet_id)
     topic_bytes = topic.encode("utf-8")
     payload = struct.pack("!H", len(topic_bytes)) + topic_bytes + b"\x00"
@@ -201,23 +200,23 @@ def build_mqtt_subscribe(packet_id, topic):
 
 
 def build_client_id(access_key):
-    """clientId MQTT único por conexión, siguiendo el patrón de la app oficial.
+    """Unique MQTT clientId per connection, following the official app's pattern.
 
-    La app usa ``mqtt-client_<accessKey>_<Date.now()>``. Añadimos un sufijo
-    aleatorio para garantizar unicidad aunque dos intentos caigan en el mismo
-    milisegundo. Evita colisiones con la app u otras conexiones que usen el
-    mismo aws_mqtt_user (AWS IoT expulsa clientIds duplicados). Ver
+    The app uses ``mqtt-client_<accessKey>_<Date.now()>``. A random suffix is
+    added to guarantee uniqueness even if two attempts fall in the same
+    millisecond. Avoids collisions with the app or other connections using
+    the same aws_mqtt_user (AWS IoT disconnects duplicate clientIds). See
     docs/protocol-findings.md §6b.
     """
     return f"mqtt-client_{access_key}_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
 
 
 def build_status_topic(base_topic, ref):
-    """Topic de suscripción de estado para un controlador.
+    """Status subscription topic for a controller.
 
-    Estructura confirmada: ``{aws_base_topic}get/ctl/{ref}/#`` donde
-    aws_base_topic suele ser ``pro/v1/``. Si no se conoce, se usa el valor
-    por defecto histórico. Ver docs/protocol-findings.md §6b.
+    Confirmed structure: ``{aws_base_topic}get/ctl/{ref}/#`` where
+    aws_base_topic is usually ``pro/v1/``. If unknown, the historical default
+    is used. See docs/protocol-findings.md §6b.
     """
     base = base_topic or "pro/v1/"
     if not base.endswith("/"):
@@ -226,12 +225,12 @@ def build_status_topic(base_topic, ref):
 
 
 def build_feedback_topic(base_topic, mqtt_user):
-    """Topic de confirmación (ACK) de instrucciones enviadas por HTTP.
+    """Acknowledgement (ACK) topic for instructions sent over HTTP.
 
-    Estructura confirmada desde la app oficial:
-    ``{aws_base_topic}get/usr/{aws_mqtt_user}/feedback``, con payload
-    ``{orderId, ctl, ...}`` (ver docs/protocol-findings.md §8 y
-    docs/known-unknowns.md #23 — forma exacta sin confirmar con captura real).
+    Structure confirmed from the official app:
+    ``{aws_base_topic}get/usr/{aws_mqtt_user}/feedback``, with payload
+    ``{orderId, ctl, ...}`` (see docs/protocol-findings.md §8 and
+    docs/known-unknowns.md #23).
     """
     base = base_topic or "pro/v1/"
     if not base.endswith("/"):
@@ -242,15 +241,15 @@ def build_feedback_topic(base_topic, mqtt_user):
 def compute_backoff_delay(
     attempt, base=10, max_delay=120, jitter_fraction=0.2, rng=None
 ):
-    """Retraso de reconexión con backoff exponencial y jitter (E3).
+    """Reconnect delay with exponential backoff and jitter (E3).
 
-    ``attempt`` empieza en 0 para el primer reintento tras una conexión
-    lograda (CONNACK). El backoff exponencial (``base * 2**attempt``,
-    limitado a ``max_delay``) se aplica solo a desconexiones **no
-    planificadas**; el refresco proactivo de credenciales (ver
-    ``_on_credential_refresh_due``) sigue reconectando sin espera. El jitter
-    (±``jitter_fraction``) evita que varias instalaciones/hilos reintenten
-    todos a la vez tras un fallo compartido (p. ej. un blip de red general).
+    ``attempt`` starts at 0 for the first retry after a successful
+    connection (CONNACK). The exponential backoff (``base * 2**attempt``,
+    capped at ``max_delay``) only applies to **unplanned** disconnects; the
+    proactive credential refresh (see ``_on_credential_refresh_due``) still
+    reconnects without waiting. The jitter (±``jitter_fraction``) prevents
+    several installations/threads from retrying all at once after a shared
+    failure (e.g. a general network blip).
     """
     rng = rng or random
     delay = min(base * (2**attempt), max_delay)
@@ -259,76 +258,78 @@ def compute_backoff_delay(
 
 
 # ==========================================================
-# 🌐 Cliente principal MySair MQTT
+# Main MySair MQTT client
 # ==========================================================
 class MySairMQTTClient:
-    """Gestor MQTT para MySair mediante WebSocket directo."""
+    """MQTT client for MySair over a direct WebSocket."""
 
     def __init__(self, api, installation_refs, message_callback, on_auth_failure=None):
         self.api = api
         self.installation_refs = installation_refs
         self.message_callback = message_callback
-        # Callback opcional () -> None, invocado cuando la sesión MySair deja
-        # de ser válida (MySairAuthError al renovar credenciales AWS). El hilo
-        # sigue reintentando en degradado; quien lo inyecta (__init__.py) es
-        # responsable de pedir el reauth desde el loop de HA.
+        # Optional callback () -> None, invoked when the MySair session becomes
+        # invalid (MySairAuthError while renewing AWS credentials). The thread
+        # keeps retrying in degraded mode; whoever injects it (__init__.py) is
+        # responsible for requesting reauth from the HA loop.
         self.on_auth_failure = on_auth_failure
         self._auth_failure_reported = False
         self.stop_event = threading.Event()
         self._thread = None
-        self._reconnect_delay = 10  # base del backoff exponencial (E3)
+        self._reconnect_delay = 10  # base of the exponential backoff (E3)
         self._max_reconnect_delay = 120
         self._reconnect_attempt = 0
         self.ws = None
         self.connected = False
-        self._base_topic = None  # aws_base_topic, se fija al conectar
-        self._mqtt_user = None  # aws_mqtt_user, para el topic de feedback
+        self._base_topic = None  # aws_base_topic, set on connect
+        self._mqtt_user = None  # aws_mqtt_user, for the feedback topic
         self._credential_refresh_timer = None
         self._planned_reconnect = False
-        # --- Observabilidad (D3/D4): estado y métricas expuestas a
-        # diagnostics.py y a MySairMqttStatusSensor (sensor.py). ---
+        # --- Observability (D3/D4): state and metrics exposed to
+        # diagnostics.py and MySairMqttStatusSensor (sensor.py). ---
         self.last_message_at = (
-            None  # D3: datetime UTC del último PUBLISH parseado con éxito
+            None  # D3: UTC datetime of the last successfully parsed PUBLISH
         )
-        self.total_reconnects = 0  # D4: contador acumulado, no se resetea (a diferencia de _reconnect_attempt)
-        self.parse_strict_count = 0  # D4: PUBLISH decodificados por el método estricto
+        self.total_reconnects = (
+            0  # D4: cumulative counter, never reset (unlike _reconnect_attempt)
+        )
+        self.parse_strict_count = 0  # D4: PUBLISH decoded by the strict method
         self.parse_fallback_count = (
-            0  # D4: PUBLISH decodificados por la heurística de texto de respaldo
+            0  # D4: PUBLISH decoded by the fallback text heuristic
         )
         self.parse_error_count = (
-            0  # D4: mensajes que no se pudieron parsear por ningún método
+            0  # D4: messages that could not be parsed by any method
         )
-        self.last_close_code = None  # D4: código de cierre del último _on_close
-        self.last_close_msg = None  # D4: mensaje de cierre del último _on_close
-        self._recv_buffer = b""  # E2: bytes WS acumulados aún no procesados (frames parciales/multi-paquete)
+        self.last_close_code = None  # D4: close code of the last _on_close
+        self.last_close_msg = None  # D4: close message of the last _on_close
+        self._recv_buffer = b""  # E2: accumulated WS bytes not yet processed (partial/multi-packet frames)
 
     @property
     def reconnect_attempt(self):
-        """Intentos de reconexión desde el último CONNACK logrado (se resetea al conectar)."""
+        """Reconnect attempts since the last successful CONNACK (reset on connect)."""
         return self._reconnect_attempt
 
     def _report_auth_failure(self):
-        """Avisa (una sola vez) de que la sesión requiere reautenticación."""
+        """Report (only once) that the session requires reauthentication."""
         if self._auth_failure_reported or not self.on_auth_failure:
             return
         self._auth_failure_reported = True
         try:
             self.on_auth_failure()
         except Exception as e:
-            log(f"⚠️ [MySair MQTT] Error notificando fallo de sesión: {e}", "warning")
+            log(f"[MySair MQTT] Failed to report session failure: {e}", "warning")
 
     # ----------------------------------------------------------
-    # 🔗 Conexión principal
+    # Main connection
     # ----------------------------------------------------------
     def start(self):
-        """Inicia el cliente MQTT en un hilo separado."""
-        log("🚀 [MySair MQTT] Iniciando hilo WebSocket MQTT...")
+        """Start the MQTT client in a separate thread."""
+        log("[MySair MQTT] Starting MQTT WebSocket thread...")
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def stop(self):
-        """Cierra la conexión WebSocket limpiamente."""
-        log("🛑 [MySair MQTT] Deteniendo cliente WebSocket MQTT...")
+        """Close the WebSocket connection cleanly."""
+        log("[MySair MQTT] Stopping MQTT WebSocket client...")
         self.stop_event.set()
         self._cancel_credential_refresh_timer()
         if self.ws:
@@ -337,10 +338,10 @@ class MySairMQTTClient:
             except Exception:
                 pass
         self.connected = False
-        log("✅ [MySair MQTT] Cliente detenido.")
+        log("[MySair MQTT] Client stopped.")
 
     # ----------------------------------------------------------
-    # 🔄 Refresco proactivo de credenciales (evita que AWS corte primero)
+    # Proactive credential refresh (prevents AWS from dropping the connection first)
     # ----------------------------------------------------------
     def _cancel_credential_refresh_timer(self):
         if self._credential_refresh_timer:
@@ -348,11 +349,11 @@ class MySairMQTTClient:
             self._credential_refresh_timer = None
 
     def _schedule_credential_refresh_timer(self):
-        """Programa un refresco de conexión antes de que caduquen las
-        credenciales AWS actuales, en vez de esperar a que AWS IoT corte la
-        conexión por su cuenta (causa confirmada de desconexiones periódicas
-        "sistemáticas" — ver docs/known-unknowns.md y protocol-findings.md §6b:
-        la app oficial hace exactamente esto con un setTimeout).
+        """Schedule a connection refresh before the current AWS credentials
+        expire, instead of waiting for AWS IoT to drop the connection on its
+        own (confirmed cause of regular "systematic" disconnects - see
+        docs/known-unknowns.md and protocol-findings.md §6b: the official app
+        does exactly this with a setTimeout).
         """
         self._cancel_credential_refresh_timer()
         delay = self.api.seconds_until_aws_credentials_expire()
@@ -364,14 +365,14 @@ class MySairMQTTClient:
         self._credential_refresh_timer.daemon = True
         self._credential_refresh_timer.start()
         log(
-            f"⏳ [MySair MQTT] Refresco proactivo de conexión programado en {delay:.0f}s",
+            f"[MySair MQTT] Proactive connection refresh scheduled in {delay:.0f}s",
             "debug",
         )
 
     def _on_credential_refresh_due(self):
-        """Fuerza una reconexión con credenciales frescas antes de que caduquen."""
+        """Force a reconnect with fresh credentials before they expire."""
         log(
-            "🔄 [MySair MQTT] Refrescando conexión antes de que caduquen las credenciales AWS...",
+            "[MySair MQTT] Refreshing connection before the AWS credentials expire...",
             "debug",
         )
         self._planned_reconnect = True
@@ -382,14 +383,14 @@ class MySairMQTTClient:
                 pass
 
     # ----------------------------------------------------------
-    # 🧠 Lógica de conexión
+    # Connection logic
     # ----------------------------------------------------------
     def _run(self):
         while not self.stop_event.is_set():
             try:
-                # Refrescar credenciales AWS si faltan o están por expirar
-                # (aws_expires_at). Se hace en CADA intento de conexión para no
-                # reutilizar una firma caducada tras una desconexión larga.
+                # Refresh the AWS credentials if missing or about to expire
+                # (aws_expires_at). Done on EVERY connection attempt so an
+                # expired signature is never reused after a long disconnect.
                 if self.api.aws_credentials_expired():
                     self.api.refresh_aws_credentials()
 
@@ -401,7 +402,7 @@ class MySairMQTTClient:
                         max_delay=self._max_reconnect_delay,
                     )
                     log(
-                        f"❌ [MySair MQTT] No se pudieron obtener credenciales AWS. Reintentando en {delay:.1f}s.",
+                        f"[MySair MQTT] Could not get AWS credentials. Retrying in {delay:.1f}s.",
                         "error",
                     )
                     self._reconnect_attempt += 1
@@ -409,7 +410,7 @@ class MySairMQTTClient:
                     time.sleep(delay)
                     continue
 
-                # Datos AWS / MQTT
+                # AWS / MQTT data
                 host = aws.get("endpoint") or aws.get("aws_mqtt_host")
                 region = aws.get("region") or aws.get("aws_default_region")
                 access_key = aws.get("accessKeyId") or aws.get("aws_access_key_id")
@@ -417,24 +418,24 @@ class MySairMQTTClient:
                     "aws_secret_access_key"
                 )
                 token = aws.get("sessionToken") or aws.get("aws_security_token")
-                # clientId único por conexión (no aws_mqtt_user) para evitar
-                # expulsiones mutuas con la app oficial. Ver docs/protocol-findings.md.
+                # Unique clientId per connection (not aws_mqtt_user) to avoid
+                # mutual disconnects with the official app. See docs/protocol-findings.md.
                 client_id = build_client_id(access_key)
                 username = aws.get("aws_mqtt_user")
                 password = aws.get("aws_security_token")
                 self._base_topic = aws.get("aws_base_topic")
                 self._mqtt_user = username
 
-                # Generar URL firmada (no se loguea: contiene la firma AWS)
+                # Build the signed URL (never logged: it contains the AWS signature)
                 signed_url = self.api.aws_sign_url(
                     host, region, access_key, secret_key, token
                 )
                 log(
-                    f"🔗 [MySair MQTT] Conectando a {host} como {_redact_client_id(client_id)}",
+                    f"[MySair MQTT] Connecting to {host} as {_redact_client_id(client_id)}",
                     "debug",
                 )
 
-                # Configurar cliente WebSocket
+                # Configure the WebSocket client
                 headers = {"Sec-WebSocket-Protocol": "mqtt"}
                 self.ws = websocket.WebSocketApp(
                     signed_url,
@@ -445,37 +446,37 @@ class MySairMQTTClient:
                     on_close=self._on_close,
                 )
 
-                # Refrescar la conexión antes de que caduquen estas credenciales,
-                # en vez de esperar a que AWS IoT la corte (ver
-                # docs/known-unknowns.md — causa de desconexiones periódicas).
+                # Refresh the connection before these credentials expire instead
+                # of waiting for AWS IoT to drop it (see docs/known-unknowns.md -
+                # cause of regular disconnects).
                 self._schedule_credential_refresh_timer()
 
                 self.ws.run_forever(ping_interval=30, ping_timeout=10)
 
             except self.api.AuthError as e:
-                # La sesión MySair ha dejado de ser válida con la integración
-                # ya arrancada (p. ej. el refresh_token se invalidó en
-                # servidor). Sin esto el hilo reintentaba en silencio para
-                # siempre y el usuario no se enteraba hasta el siguiente
-                # reinicio de HA. Se avisa una sola vez y se sigue con el
-                # backoff: si el usuario reautentica, la próxima vuelta del
-                # bucle encuentra la sesión ya renovada.
+                # The MySair session became invalid while the integration is
+                # running (e.g. the refresh_token was invalidated on the
+                # server). Without this the thread retried silently forever and
+                # the user only noticed after the next HA restart. Reported
+                # only once, then the backoff continues: if the user
+                # reauthenticates, the next loop iteration finds the renewed
+                # session.
                 log(
-                    f"🔑 [MySair MQTT] Sesión inválida, se requiere reautenticación: {e}",
+                    f"[MySair MQTT] Session invalid, reauthentication required: {e}",
                     "error",
                 )
                 self._report_auth_failure()
             except Exception as e:
-                log(f"❌ [MySair MQTT] Error en conexión WebSocket: {e}", "error")
+                log(f"[MySair MQTT] WebSocket connection error: {e}", "error")
 
-            # Esperar antes de reintentar, salvo que sea un refresco
-            # proactivo planificado (credenciales ya frescas: reconectar ya).
-            # Las desconexiones no planificadas usan backoff exponencial con
-            # jitter (E3), que se reinicia en el próximo CONNACK logrado.
+            # Wait before retrying, unless this is a planned proactive refresh
+            # (credentials already fresh: reconnect right away). Unplanned
+            # disconnects use exponential backoff with jitter (E3), which is
+            # reset on the next successful CONNACK.
             if not self.stop_event.is_set():
                 if self._planned_reconnect:
                     log(
-                        "🔁 [MySair MQTT] Reconectando de inmediato (refresco proactivo de credenciales)..."
+                        "[MySair MQTT] Reconnecting immediately (proactive credential refresh)..."
                     )
                     self._planned_reconnect = False
                 else:
@@ -485,133 +486,131 @@ class MySairMQTTClient:
                         max_delay=self._max_reconnect_delay,
                     )
                     log(
-                        f"🔁 [MySair MQTT] Reintentando conexión en {delay:.1f}s (intento {self._reconnect_attempt + 1})..."
+                        f"[MySair MQTT] Retrying connection in {delay:.1f}s (attempt {self._reconnect_attempt + 1})..."
                     )
                     self._reconnect_attempt += 1
                     self.total_reconnects += 1
                     time.sleep(delay)
 
     # ----------------------------------------------------------
-    # 📡 Callbacks WebSocket
+    # WebSocket callbacks
     # ----------------------------------------------------------
     def _on_open(self, ws, client_id, username, password):
-        """Evento: WebSocket abierto."""
+        """Event: WebSocket opened."""
         try:
             log(
-                "✅ [MySair MQTT] WebSocket abierto, enviando paquete CONNECT...",
+                "[MySair MQTT] WebSocket opened, sending CONNECT packet...",
                 "debug",
             )
             pkt = build_mqtt_connect(client_id, username, password)
             ws.send(pkt, opcode=websocket.ABNF.OPCODE_BINARY)
-            log("📤 [MySair MQTT] CONNECT enviado.", "debug")
+            log("[MySair MQTT] CONNECT sent.", "debug")
         except Exception as e:
-            log(f"❌ [MySair MQTT] Error enviando CONNECT: {e}", "error")
+            log(f"[MySair MQTT] Failed to send CONNECT: {e}", "error")
 
     def _on_message(self, ws, message):
-        """Evento: bytes recibidos desde el broker.
+        """Event: bytes received from the broker.
 
-        E2: no se asume que ``message`` sea exactamente un paquete MQTT
-        completo — se acumula en ``self._recv_buffer`` y se drena en bucle,
-        para soportar tanto varios paquetes coalescidos en un mismo mensaje
-        WS como un paquete partido entre dos llamadas.
+        E2: ``message`` is not assumed to be exactly one complete MQTT packet -
+        it is appended to ``self._recv_buffer`` and drained in a loop, to
+        support both several packets coalesced in one WS message and one
+        packet split across two calls.
         """
         try:
             self._recv_buffer += message
             self._drain_recv_buffer(ws)
         except Exception as e:
-            log(f"⚠️ [MySair MQTT] Error general en _on_message: {e}", "warning")
+            log(f"[MySair MQTT] General error in _on_message: {e}", "warning")
 
     def _drain_recv_buffer(self, ws):
-        """Extrae y despacha del buffer todos los paquetes MQTT completos
-        que pueda, dejando en el buffer solo el resto incompleto (E2).
+        """Extract and dispatch all complete MQTT packets from the buffer,
+        leaving only the incomplete remainder in it (E2).
 
-        No hace falta un cap aparte para el caso "incompleto, esperando más
-        bytes": la comprobación ``result > MAX_RECV_BUFFER_SIZE`` de abajo ya
-        garantiza que el buffer nunca puede crecer más allá del cap mientras
-        espera un paquete legítimo (una longitud declarada por encima del
-        cap se rechaza de inmediato, antes de esperar a que lleguen tantos
-        bytes).
+        No separate cap is needed for the "incomplete, waiting for more
+        bytes" case: the ``result > MAX_RECV_BUFFER_SIZE`` check below already
+        guarantees the buffer never grows beyond the cap while waiting for a
+        legitimate packet (a declared length above the cap is rejected right
+        away, before waiting for that many bytes).
         """
         while True:
             result = _next_packet_length(self._recv_buffer)
 
             if result is FrameState.INCOMPLETE:
-                return  # esperar más bytes en la próxima llamada
+                return  # wait for more bytes in the next call
 
             if result is FrameState.MALFORMED or result > MAX_RECV_BUFFER_SIZE:
                 self._recover_from_malformed_stream()
                 return
 
             if len(self._recv_buffer) < result:
-                return  # partición real: falta el resto de este paquete
+                return  # real split: the rest of this packet is missing
 
             packet, rest = self._recv_buffer[:result], self._recv_buffer[result:]
             if not self._dispatch_packet(ws, packet):
-                # El "paquete" delimitado por la longitud no supera la
-                # validación de contenido (p. ej. bytes que no son una trama
-                # MQTT real pero coinciden por casualidad con un varint
-                # válido). Igual que antes de E2, se aplica el heurístico de
-                # texto de respaldo al buffer completo restante y se
-                # renuncia a seguir troceándolo.
+                # The length-delimited "packet" fails content validation
+                # (e.g. bytes that are not a real MQTT frame but happen to
+                # match a valid varint). As before E2, the fallback text
+                # heuristic is applied to the whole remaining buffer and no
+                # further splitting is attempted.
                 self._dispatch_legacy_fallback(self._recv_buffer)
                 self._recv_buffer = b""
                 return
 
-            self._recv_buffer = rest  # sigue buscando más paquetes coalescidos
+            self._recv_buffer = rest  # keep looking for more coalesced packets
 
     def _recover_from_malformed_stream(self):
         log(
-            "⚠️ [MySair MQTT] Varint de longitud MQTT inválido o longitud de paquete "
-            "absurda; se descarta el buffer de recepción.",
+            "[MySair MQTT] Invalid MQTT length varint or absurd packet length; "
+            "discarding the receive buffer.",
             "warning",
         )
         self._recv_buffer = b""
 
     def _dispatch_packet(self, ws, packet):
-        """Procesa un paquete MQTT ya delimitado a su longitud exacta.
+        """Process an MQTT packet already cut to its exact length.
 
-        Devuelve ``True`` si se despachó (o se ignoró un tipo desconocido de
-        forma segura), o ``False`` solo si es un PUBLISH cuyo parseo
-        estricto de contenido falló (``parse_mqtt_publish`` no concluyente)
-        — en ese caso el llamador decide aplicar el heurístico de texto de
-        respaldo sobre el buffer completo, no sobre este `packet` aislado.
+        Returns ``True`` if it was dispatched (or an unknown type was safely
+        ignored), or ``False`` only for a PUBLISH whose strict content parsing
+        failed (``parse_mqtt_publish`` inconclusive) - in that case the caller
+        applies the fallback text heuristic to the whole buffer, not to this
+        isolated `packet`.
         """
         # CONNACK
         if packet[0] == 0x20:
-            log("✅ [MySair MQTT] CONNACK recibido, suscribiendo a topics...")
+            log("[MySair MQTT] CONNACK received, subscribing to topics...")
             self.connected = True
-            self._reconnect_attempt = 0  # conexión lograda: reinicia el backoff (E3)
-            # La sesión vuelve a servir (p. ej. tras reautenticar): rearma el
-            # aviso para que una caída futura se vuelva a notificar.
+            self._reconnect_attempt = 0  # connected: reset the backoff (E3)
+            # The session works again (e.g. after reauth): re-arm the warning
+            # so a future failure is reported again.
             self._auth_failure_reported = False
             packet_id = 1
             for ref in self.installation_refs:
                 topic = build_status_topic(self._base_topic, ref)
                 pkt = build_mqtt_subscribe(packet_id, topic)
                 ws.send(pkt, opcode=websocket.ABNF.OPCODE_BINARY)
-                log(f"📡 [MySair MQTT] SUBSCRIBE enviado a: {topic}", "debug")
+                log(f"[MySair MQTT] SUBSCRIBE sent to: {topic}", "debug")
                 packet_id += 1
 
-            # Confirmación (ACK) de instrucciones enviadas por HTTP, ver
+            # Acknowledgement (ACK) of instructions sent over HTTP, see
             # docs/protocol-findings.md §8.
             if self._mqtt_user:
                 feedback_topic = build_feedback_topic(self._base_topic, self._mqtt_user)
                 pkt = build_mqtt_subscribe(packet_id, feedback_topic)
                 ws.send(pkt, opcode=websocket.ABNF.OPCODE_BINARY)
-                log(f"📡 [MySair MQTT] SUBSCRIBE enviado a: {feedback_topic}", "debug")
+                log(f"[MySair MQTT] SUBSCRIBE sent to: {feedback_topic}", "debug")
             return True
 
         # SUBACK
         if packet[0] == 0x90:
-            log("✅ [MySair MQTT] SUBACK recibido.", "debug")
+            log("[MySair MQTT] SUBACK received.", "debug")
             return True
 
-        # PUBLISH (nibble alto 0x3; los bits bajos son flags DUP/QoS/RETAIN)
+        # PUBLISH (high nibble 0x3; the low bits are DUP/QoS/RETAIN flags)
         if (packet[0] & 0xF0) == 0x30:
             try:
-                # Método primario: decodificación conforme al estándar MQTT
-                # (ver parse_mqtt_publish, known-unknowns #6). Si no es
-                # concluyente, el llamador cae al heurístico de texto.
+                # Primary method: standard-compliant MQTT decoding (see
+                # parse_mqtt_publish, known-unknowns #6). If inconclusive, the
+                # caller falls back to the text heuristic.
                 strict_topic, strict_payload = parse_mqtt_publish(packet)
                 if strict_topic is None:
                     return False
@@ -623,7 +622,7 @@ class MySairMQTTClient:
                     datetime.timezone.utc
                 )  # D3
                 log(
-                    f"📥 [MySair MQTT] Mensaje MQTT recibido ({strict_topic}): {decoded[:200]}...",
+                    f"[MySair MQTT] MQTT message received ({strict_topic}): {decoded[:200]}...",
                     "debug",
                 )
 
@@ -632,31 +631,28 @@ class MySairMQTTClient:
                 return True
             except Exception as e:
                 self.parse_error_count += 1  # D4
-                log(f"⚠️ [MySair MQTT] Error procesando mensaje: {e}", "warning")
-                return (
-                    True  # ya contabilizado como error; no reintentar como heurístico
-                )
+                log(f"[MySair MQTT] Failed to process message: {e}", "warning")
+                return True  # already counted as an error; do not retry as heuristic
 
-        # Tipo de paquete desconocido/no manejado: se ignora en silencio,
-        # igual que antes de E2.
+        # Unknown/unhandled packet type: silently ignored, as before E2.
         return True
 
     def _dispatch_legacy_fallback(self, buffer):
-        """Heurística de texto de respaldo (sin cambios respecto a antes de
-        E2), aplicada ahora al buffer completo en vez de a un `message`
-        crudo — equivalente cuando no hay reensamblado en curso."""
+        """Fallback text heuristic (unchanged since before E2), now applied to
+        the whole buffer instead of a raw `message` - equivalent when no
+        reassembly is in progress."""
         try:
             payload = buffer.split(b"\x00", 2)[-1]
             decoded = payload.decode("utf-8", errors="ignore").strip()
             data, start = _extract_json(decoded)
-            # Confirmado en producción (2026-07-20) que el broker no siempre
-            # envuelve el topic entre paréntesis: a veces es "(topic){json}",
-            # a veces "topic{json}" sin paréntesis (p. ej. el topic de feedback).
+            # The broker does not always wrap the topic in parentheses:
+            # sometimes it is "(topic){json}", sometimes "topic{json}" without
+            # parentheses (e.g. the feedback topic).
             topic = decoded[:start].strip(" ()") if start > 0 else "unknown"
             self.parse_fallback_count += 1  # D4
             self.last_message_at = datetime.datetime.now(datetime.timezone.utc)  # D3
             log(
-                f"📥 [MySair MQTT] Mensaje MQTT recibido ({topic}): {decoded[:200]}...",
+                f"[MySair MQTT] MQTT message received ({topic}): {decoded[:200]}...",
                 "debug",
             )
 
@@ -664,14 +660,14 @@ class MySairMQTTClient:
                 self.message_callback({"topic": topic, "payload": data})
         except Exception as e:
             self.parse_error_count += 1  # D4
-            log(f"⚠️ [MySair MQTT] Error procesando mensaje: {e}", "warning")
+            log(f"[MySair MQTT] Failed to process message: {e}", "warning")
 
     def _on_error(self, ws, error):
-        log(f"❌ [MySair MQTT] Error WebSocket: {error}", "error")
+        log(f"[MySair MQTT] WebSocket error: {error}", "error")
 
     def _on_close(self, ws, close_status_code, close_msg):
         log(
-            f"🔌 [MySair MQTT] Conexión cerrada (code={close_status_code}, msg={close_msg})"
+            f"[MySair MQTT] Connection closed (code={close_status_code}, msg={close_msg})"
         )
         self.connected = False
         self.last_close_code = close_status_code  # D4

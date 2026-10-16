@@ -1,17 +1,17 @@
-"""Disponibilidad de entidad basada en la frescura de los datos MQTT (C5).
+"""Entity availability based on the freshness of MQTT data (C5).
 
-Mixin compartido por las entidades climate/sensor/switch. Sin heartbeat de
-aplicación (ver docs/known-unknowns.md #11) no hay forma directa de saber si
-el dispositivo sigue "vivo"; en vez de mostrar datos potencialmente obsoletos
-como si fueran en tiempo real, la entidad se marca no disponible si no ha
-recibido un ``status`` en más de ``MQTT_STALE_AFTER_SECONDS``. Empieza no
-disponible hasta el primer status tras el arranque/recarga.
+Mixin shared by the climate/sensor/switch entities. Without an application
+heartbeat (see docs/known-unknowns.md #11) there is no direct way to tell
+whether the device is still "alive"; instead of showing potentially stale
+data as if it were live, the entity is marked unavailable when it has not
+received a ``status`` for more than ``MQTT_STALE_AFTER_SECONDS``. It starts
+unavailable until the first status after startup/reload.
 
-Con ``should_poll=False`` nada vuelve a evaluar ``available`` por su cuenta:
-si el MQTT se cae y no llega más ningún status, el último estado publicado
-se quedaría "disponible" para siempre. Por eso cada status recibido arma
-además un timer (``async_call_later``) que fuerza un `async_write_ha_state`
-al cabo de ``MQTT_STALE_AFTER_SECONDS` si no ha llegado nada más nuevo.
+With ``should_poll=False`` nothing re-evaluates ``available`` on its own:
+if MQTT drops and no further status arrives, the last published state would
+stay "available" forever. That is why every received status also arms a
+timer (``async_call_later``) that forces an `async_write_ha_state` after
+``MQTT_STALE_AFTER_SECONDS`` if nothing newer has arrived.
 """
 
 from datetime import timedelta
@@ -24,8 +24,8 @@ from .const import MQTT_STALE_AFTER_SECONDS
 
 
 class AvailabilityMixin:
-    """Requiere que la clase que lo use llame a ``self._init_availability()``
-    y a ``self._stop_availability()`` en ``async_will_remove_from_hass``."""
+    """The using class must call ``self._init_availability()`` and
+    ``self._stop_availability()`` in ``async_will_remove_from_hass``."""
 
     _attr_should_poll = False
 
@@ -48,7 +48,7 @@ class AvailabilityMixin:
 
     @callback
     def _on_stale_check(self, now):
-        """Fuerza una reevaluación de `available` cuando los datos podrían haber caducado."""
+        """Force a re-evaluation of `available` when the data may have gone stale."""
         self._cancel_stale_check = None
         self.async_write_ha_state()
 

@@ -1,4 +1,4 @@
-"""Tests P2 del config flow (harness de Home Assistant, ver Dockerfile.test)."""
+"""P2 tests of the config flow (Home Assistant harness, see Dockerfile.test)."""
 
 import pytest
 
@@ -46,7 +46,7 @@ async def test_user_flow_success_creates_entry(hass, monkeypatch):
     )
     assert result2["type"] == FlowResultType.CREATE_ENTRY
     assert result2["title"] == "MySair"
-    # A6: no se persiste password ni access_token, solo email + refresh_token.
+    # A6: neither password nor access_token is stored, only email + refresh_token.
     assert result2["data"] == {
         "email": "user@example.com",
         "refresh_token": "REFRESH_NEW",
@@ -84,7 +84,7 @@ async def test_user_flow_cannot_connect(hass, monkeypatch):
 
 
 async def test_user_flow_duplicate_account_aborts(hass, monkeypatch):
-    # C2: la misma cuenta (mismo email, normalizado en minúsculas) no se puede añadir dos veces.
+    # C2: the same account (same email, lower-cased) cannot be added twice.
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id="user@example.com",
@@ -146,5 +146,5 @@ async def test_reauth_flow_invalid_auth_shows_error(hass, monkeypatch):
     )
     assert result2["type"] == FlowResultType.FORM
     assert result2["errors"] == {"base": "invalid_auth"}
-    # El refresh_token no cambia si la reautenticación falla.
+    # The refresh_token does not change if reauthentication fails.
     assert entry.data["refresh_token"] == "STALE"

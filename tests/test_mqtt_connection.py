@@ -1,6 +1,6 @@
-"""Tests P0/P1 de la robustez de conexión MQTT (client_id, topic, expiración).
+"""P0/P1 tests of MQTT connection robustness (client_id, topic, expiry).
 
-Sin Home Assistant. Requiere websocket-client (mqtt_handler) y requests (api).
+No Home Assistant. Requires websocket-client (mqtt_handler) and requests (api).
 """
 
 import time
@@ -35,7 +35,7 @@ from api import MySairAPI, MySairConnectionError
 def test_client_id_is_unique_per_call():
     a = build_client_id("AKIATEST")
     b = build_client_id("AKIATEST")
-    assert a != b  # incluye timestamp en ms
+    assert a != b  # includes the timestamp in ms
 
 
 def test_client_id_format():
@@ -45,11 +45,11 @@ def test_client_id_format():
     # mqtt-client / accessKey / timestamp(ms) / random
     assert len(parts) == 4
     assert parts[2].isdigit()  # timestamp
-    assert parts[3]  # sufijo aleatorio no vacío
+    assert parts[3]  # non-empty random suffix
 
 
 def test_client_id_is_not_the_mqtt_user():
-    # No debe ser el aws_mqtt_user (evita expulsiones con la app oficial)
+    # Must not be the aws_mqtt_user (avoids disconnects with the official app)
     assert build_client_id("AKIATEST") != "web0000"
 
 
@@ -104,7 +104,7 @@ def test_expired_when_no_credentials():
 
 
 def test_not_expired_without_expiry_info():
-    # Con credenciales pero sin aws_expires_at: no forzamos refresco por tiempo
+    # Credentials without aws_expires_at: no time-based refresh is forced
     api = _api_with_creds()
     assert api.aws_credentials_expired() is False
 
@@ -115,7 +115,7 @@ def test_expired_when_past_expiry():
 
 
 def test_expired_within_margin():
-    # Expira en 30s, margen por defecto 60s → conviene refrescar
+    # Expires in 30s, default margin 60s → should refresh
     api = _api_with_creds(aws_expires_at=time.time() + 30)
     assert api.aws_credentials_expired() is True
 
@@ -130,7 +130,7 @@ def test_expired_ignores_bad_expiry_value():
     assert api.aws_credentials_expired() is False
 
 
-# --- seconds_until_aws_credentials_expire (refresco proactivo de conexión) ---
+# --- seconds_until_aws_credentials_expire (proactive connection refresh) ---
 
 
 def test_seconds_until_expire_none_without_credentials():
@@ -146,7 +146,7 @@ def test_seconds_until_expire_none_without_expiry_info():
 
 def test_seconds_until_expire_computes_remaining_time():
     api = _api_with_creds(aws_expires_at=time.time() + 660)
-    # 660s hasta expirar - 60s de margen = ~600s
+    # 660s until expiry - 60s margin = ~600s
     assert 590 <= api.seconds_until_aws_credentials_expire() <= 600
 
 
@@ -165,16 +165,15 @@ def test_seconds_until_expire_ignores_bad_value():
     assert api.seconds_until_aws_credentials_expire() is None
 
 
-# --- _on_message: extracción de topic de un frame PUBLISH ---
-# Bug real de producción (2026-07-20): el broker no siempre envuelve el
-# topic entre paréntesis "(topic){json}" — el topic de feedback llega como
-# "topic{json}" sin paréntesis, y antes se clasificaba como "unknown",
-# rompiendo la confirmación de comandos por completo.
+# --- _on_message: topic extraction from a PUBLISH frame ---
+# The broker does not always wrap the topic in parentheses "(topic){json}" -
+# the feedback topic arrives as "topic{json}" without parentheses; it used to
+# be classified as "unknown", which broke command confirmation entirely.
 
 
 def _publish_message(topic_plus_json: bytes) -> bytes:
-    # Fixed header + 2 bytes nulos (imitando cabecera/packet id variables,
-    # cuyo contenido _on_message ignora) + "topic{json...}".
+    # Fixed header + 2 null bytes (mimicking variable header/packet id,
+    # whose content _on_message ignores) + "topic{json...}".
     return b"\x30" + b"\x00garbage\x00" + topic_plus_json
 
 
@@ -220,13 +219,12 @@ def test_on_message_no_prefix_is_unknown():
 
 # --- decode_varint / parse_mqtt_publish (E1, known-unknowns #6) ---
 #
-# Confirmado por inferencia cruzada de capturas reales: el topic de status
-# ("...status", 40 caracteres) mostraba un "(" delante en los logs porque
-# chr(40) == '(' — es el byte bajo del campo de longitud MQTT estándar de
-# 2 bytes que precede al Topic Name, no un envoltorio de la app. El topic de
-# feedback (31 caracteres, chr(31) no imprimible) no mostraba nada visible.
-# Estos tests construyen frames PUBLISH sintéticos pero conformes al
-# estándar MQTT 3.1.1 para verificar el decodificador contra esa evidencia.
+# The status topic ("...status", 40 characters) showed a "(" in front of it
+# in the logs because chr(40) == '(' - it is the low byte of the standard
+# 2-byte MQTT length field preceding the Topic Name, not an app wrapper. The
+# feedback topic (31 characters, chr(31) not printable) showed nothing.
+# These tests build synthetic but MQTT 3.1.1 compliant PUBLISH frames to
+# verify the decoder against that evidence.
 
 
 def _build_publish_frame(
@@ -250,13 +248,13 @@ def test_decode_varint_roundtrip_with_encode_varint():
 
 
 def test_decode_varint_incomplete_returns_none():
-    value, pos = decode_varint(b"\x80")  # bit de continuación sin más bytes
+    value, pos = decode_varint(b"\x80")  # continuation bit without further bytes
     assert value is None
     assert pos == 0
 
 
 def test_parse_mqtt_publish_status_topic_matches_real_capture_length():
-    # 40 caracteres: el mismo largo que hacía aparecer un "(" fantasma en los logs.
+    # 40 characters: the length that produced a ghost "(" in the logs.
     topic = "pro/v1/get/ctl/MYS94B97E0C9177FB6/status"
     assert len(topic) == 40
     payload = b'{"ctl":"MYS94B97E0C9177FB6","value":"{}"}'
@@ -269,7 +267,7 @@ def test_parse_mqtt_publish_status_topic_matches_real_capture_length():
 
 
 def test_parse_mqtt_publish_feedback_topic_matches_real_capture_length():
-    # 31 caracteres: el largo que no mostraba ningún carácter fantasma visible.
+    # 31 characters: the length that showed no visible ghost character.
     topic = "pro/v1/get/usr/web0077/feedback"
     assert len(topic) == 31
     payload = b'{"orderId":"5b1ae0","ctl":"INST_A"}'
@@ -318,9 +316,9 @@ def test_on_message_uses_strict_parser_for_well_formed_frame():
 
 
 def test_on_message_falls_back_when_strict_parse_inconclusive():
-    # Mismos mensajes "a mano" que test_on_message_extracts_topic_without_parens:
-    # no son un frame MQTT válido, así que deben seguir resolviéndose por la
-    # heurística de texto (comportamiento sin cambios para estos casos).
+    # Same hand-written messages as test_on_message_extracts_topic_without_parens:
+    # they are not valid MQTT frames, so they must still be resolved by the text
+    # heuristic (unchanged behaviour for these cases).
     client, received = _client()
     msg = _publish_message(
         b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
@@ -331,11 +329,11 @@ def test_on_message_falls_back_when_strict_parse_inconclusive():
     assert received[0]["topic"] == "pro/v1/get/usr/web0077/feedback"
 
 
-# --- Refresco proactivo de conexión (evita que AWS corte primero) ---
+# --- Proactive connection refresh (prevents AWS from dropping it first) ---
 
 
 class _FakeTimer:
-    """Doble de threading.Timer: no arranca hilos reales ni espera de verdad."""
+    """Stand-in for threading.Timer: starts no real threads and does not actually wait."""
 
     instances = []
 
@@ -380,7 +378,7 @@ def test_schedule_credential_refresh_timer_creates_timer():
 
 
 def test_schedule_credential_refresh_timer_noop_without_expiry_info():
-    client = _client_with_creds()  # sin aws_expires_at
+    client = _client_with_creds()  # no aws_expires_at
     client._schedule_credential_refresh_timer()
 
     assert _FakeTimer.instances == []
@@ -425,7 +423,7 @@ def test_on_credential_refresh_due_marks_planned_reconnect_and_closes_ws():
 
 
 class _ZeroJitterRng:
-    """Doble de `random`: sin aleatoriedad, para comprobar el valor exacto del backoff."""
+    """Stand-in for `random` without randomness, to check the exact backoff value."""
 
     def uniform(self, a, b):
         return 0.0
@@ -504,9 +502,9 @@ def test_last_message_at_set_on_fallback_parse_success():
 
 def test_parse_error_count_increments_on_unparseable_message():
     client, _ = _client()
-    # PUBLISH sin ningún JSON: ni el estricto ni la heurística de texto
-    # encuentran nada, así que cae en el except y cuenta como error.
-    msg = b"\x30" + b"\x00sin json aqui\x00"
+    # PUBLISH without any JSON: neither the strict method nor the text
+    # heuristic finds anything, so it ends in the except and counts as an error.
+    msg = b"\x30" + b"\x00no json here\x00"
     client._on_message(None, msg)
 
     assert client.parse_error_count == 1
@@ -515,8 +513,8 @@ def test_parse_error_count_increments_on_unparseable_message():
 
 
 def test_total_reconnects_does_not_reset_on_connack_unlike_reconnect_attempt():
-    # total_reconnects es acumulado durante toda la vida del cliente (D4);
-    # _reconnect_attempt, en cambio, se resetea en cada CONNACK logrado (E3).
+    # total_reconnects accumulates over the client's whole lifetime (D4);
+    # _reconnect_attempt, in contrast, is reset on every successful CONNACK (E3).
     client = _client_with_creds()
     client._reconnect_attempt = 3
     client.total_reconnects = 3
@@ -539,7 +537,7 @@ def test_last_close_code_and_msg_set_on_close():
     assert client.last_close_msg == "abnormal closure"
 
 
-# --- E2: frames parciales / múltiples paquetes por frame WS ---
+# --- E2: partial frames / multiple packets per WS frame ---
 
 
 def _build_suback(packet_id=1, return_codes=b"\x00"):
@@ -551,10 +549,10 @@ def test_next_packet_length_distinguishes_incomplete_from_malformed():
     assert _next_packet_length(b"") is FrameState.INCOMPLETE
     assert (
         _next_packet_length(b"\x30\x80") is FrameState.INCOMPLETE
-    )  # 1 byte de continuación, aún puede completarse
+    )  # 1 continuation byte, can still complete
     assert (
         _next_packet_length(b"\x30\xff\xff\xff\xff") is FrameState.MALFORMED
-    )  # 4 bytes de continuación, nunca termina
+    )  # 4 continuation bytes, never terminates
     assert (
         _next_packet_length(b"\x30\x00") == 2
     )  # remaining_length=0 -> paquete de 2 bytes
@@ -589,12 +587,12 @@ def test_on_message_dispatches_connack_and_suback_coalesced():
 @pytest.mark.parametrize(
     "split_at_fn",
     [
-        lambda topic, payload: 1,  # tras la cabecera fija, antes del varint
-        lambda topic, payload: 3,  # a mitad del prefijo de longitud de topic (2 bytes)
-        lambda topic, payload: 4 + len(topic) // 2,  # a mitad del topic
+        lambda topic, payload: 1,  # after the fixed header, before the varint
+        lambda topic, payload: 3,  # in the middle of the topic length prefix (2 bytes)
+        lambda topic, payload: 4 + len(topic) // 2,  # in the middle of the topic
         lambda topic, payload: (
             4 + len(topic) + len(payload) // 2
-        ),  # a mitad del payload
+        ),  # in the middle of the payload
     ],
 )
 def test_on_message_reassembles_publish_split_across_two_calls(split_at_fn):
@@ -605,7 +603,7 @@ def test_on_message_reassembles_publish_split_across_two_calls(split_at_fn):
     split_at = split_at_fn(topic, payload)
 
     client._on_message(None, frame[:split_at])
-    assert received == []  # aún incompleto, nada despachado todavía
+    assert received == []  # still incomplete, nothing dispatched yet
 
     client._on_message(None, frame[split_at:])
     assert len(received) == 1
@@ -615,9 +613,9 @@ def test_on_message_reassembles_publish_split_across_two_calls(split_at_fn):
 
 
 def test_on_message_legacy_fallback_unchanged_for_existing_fixtures():
-    # Re-confirma explícitamente que los tres escenarios del heurístico
-    # legacy (ver más arriba) siguen produciendo el mismo resultado bajo el
-    # nuevo bucle de reensamblado (E2) que antes de introducirlo.
+    # Explicitly re-confirms that the three legacy heuristic scenarios (see
+    # above) still produce the same result under the reassembly loop (E2) as
+    # before it was introduced.
     client, received = _client()
     msg = _publish_message(
         b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
@@ -630,14 +628,13 @@ def test_on_message_legacy_fallback_unchanged_for_existing_fixtures():
 
 
 def test_on_message_split_legacy_fallback_message_across_two_calls():
-    # El heurístico legacy no tiene framing real (no usa un remaining_length
-    # de verdad), así que solo puede reensamblarse correctamente si el corte
-    # ocurre ANTES de que el buffer alcance la "longitud declarada" (2 bytes
-    # en este fixture, ver test_next_packet_length_...) que dispara el
-    # intento de despacho. Es una limitación inherente del propio fallback
-    # sin framing, no de la partición en sí: los PUBLISH bien formados se
-    # reensamblan en cualquier punto de corte (ver test parametrizado de
-    # arriba).
+    # The legacy heuristic has no real framing (it does not use an actual
+    # remaining_length), so it can only reassemble correctly if the split
+    # happens BEFORE the buffer reaches the "declared length" (2 bytes in this
+    # fixture, see test_next_packet_length_...) that triggers the dispatch
+    # attempt. This is an inherent limitation of the frameless fallback, not of
+    # the splitting itself: well-formed PUBLISH frames reassemble at any split
+    # point (see the parametrised test above).
     client, received = _client()
     msg = _publish_message(
         b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
@@ -656,7 +653,7 @@ def test_recv_buffer_resets_when_declared_length_exceeds_cap():
     huge_len = MAX_RECV_BUFFER_SIZE + 1
     header = b"\x30" + encode_varint(
         huge_len
-    )  # muy lejos de completarse, pero ya excede el cap
+    )  # far from complete, but already exceeds the cap
 
     client._on_message(None, header)
 
@@ -666,21 +663,21 @@ def test_recv_buffer_resets_when_declared_length_exceeds_cap():
 
 def test_recv_buffer_resets_on_malformed_varint():
     client, received = _client()
-    # 4 bytes de continuación tras la cabecera fija: nunca puede terminar el
-    # varint de longitud MQTT (máximo 4 bytes permitidos por el estándar).
+    # 4 continuation bytes after the fixed header: the MQTT length varint can
+    # never terminate (the standard allows at most 4 bytes).
     client._on_message(None, b"\x30\xff\xff\xff\xff")
 
     assert client._recv_buffer == b""
     assert received == []
 
 
-# --- Reauth en caliente: la sesión muere con la integración ya arrancada ---
+# --- Live reauth: the session dies while the integration is running ---
 
 
 def _client_with_auth_callback(refresh_side_effect):
-    """Cliente cuyo refresh_aws_credentials falla como se le indique."""
+    """Client whose refresh_aws_credentials fails as instructed."""
     api = MySairAPI("e", "p")
-    api.aws_credentials = None  # fuerza el refresco en la primera vuelta
+    api.aws_credentials = None  # forces the refresh on the first iteration
 
     def _boom():
         raise refresh_side_effect
@@ -698,7 +695,7 @@ def _client_with_auth_callback(refresh_side_effect):
 
 
 def _run_once(client, monkeypatch):
-    """Ejecuta una sola vuelta de _run() (para de inmediato tras el fallo)."""
+    """Run a single iteration of _run() (stops right after the failure)."""
     monkeypatch.setattr(mqtt_handler.time, "sleep", lambda _d: client.stop_event.set())
     client._run()
 
@@ -710,9 +707,9 @@ def test_auth_error_requests_reauth(monkeypatch):
 
 
 def test_connection_error_does_not_request_reauth(monkeypatch):
-    # Un backend caído no debe molestar al usuario con un formulario de login.
+    # A backend outage must not bother the user with a login form.
     client, reauth_calls = _client_with_auth_callback(
-        MySairConnectionError("backend caído")
+        MySairConnectionError("backend down")
     )
     _run_once(client, monkeypatch)
     assert reauth_calls == []
@@ -730,5 +727,5 @@ def test_auth_failure_reported_only_once(monkeypatch):
     monkeypatch.setattr(mqtt_handler.time, "sleep", _sleep)
     client._run()
 
-    assert calls["n"] == 3  # el hilo sigue reintentando en degradado
-    assert reauth_calls == [1]  # pero solo avisa una vez
+    assert calls["n"] == 3  # the thread keeps retrying in degraded mode
+    assert reauth_calls == [1]  # but only reports once

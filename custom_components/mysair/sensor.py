@@ -14,14 +14,14 @@ from .coordinator import signal_zone_update
 
 _LOGGER = logging.getLogger(__name__)
 
-# Respetado automáticamente por HA para las entidades de este platform con
-# should_poll=True (MySairMqttStatusSensor); los sensores por zona usan
-# should_poll=False (AvailabilityMixin) y no se ven afectados.
+# Honoured automatically by HA for entities of this platform with
+# should_poll=True (MySairMqttStatusSensor); the per-zone sensors use
+# should_poll=False (AvailabilityMixin) and are not affected.
 SCAN_INTERVAL = timedelta(seconds=_SCAN_INTERVAL_SECONDS)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Configura los sensores MySair (temperaturas y modo por zona)."""
+    """Set up the MySair sensors (temperatures, mode and humidity per zone)."""
     data = hass.data[DOMAIN][entry.entry_id]
     devices = data["devices"]
     mqtt_client = data["mqtt"]
@@ -30,27 +30,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
     for inst_ref, device_list in devices.items():
         for dev in device_list:
             dev_id = dev.get("reference") or dev.get("rf") or dev.get("id")
-            name = dev.get("name", f"Zona {dev_id}")
+            name = dev.get("name", f"Zone {dev_id}")
             entities.append(MySairTempSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairSetpointSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairModeSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairHumiditySensor(hass, inst_ref, dev_id, name))
 
     async_add_entities(entities)
-    _LOGGER.info(f"[MySair Sensor] ✅ {len(entities)} sensores creados.")
+    _LOGGER.info(f"[MySair Sensor] {len(entities)} sensors created.")
 
 
 # ==========================================================
-# 📶 SENSOR DE ESTADO DE CONEXIÓN MQTT (D3/D4)
+# CLOUD (MQTT) CONNECTION STATUS SENSOR (D3/D4)
 # ==========================================================
 class MySairMqttStatusSensor(SensorEntity):
-    """Estado de la conexión MQTT (D3) y métricas de reconexión/parseo (D4).
+    """MQTT connection state (D3) and reconnect/parse metrics (D4).
 
-    Una instancia por config entry (no por zona): a diferencia del resto de
-    sensores, no depende de datos de una zona concreta ni de AvailabilityMixin
-    (su propia "no disponibilidad" no tiene sentido — incluso "offline" es
-    información válida). Se actualiza por sondeo (should_poll=True) leyendo
-    directamente el estado en vivo de MySairMQTTClient.
+    One instance per config entry (not per zone): unlike the other sensors it
+    does not depend on zone data or on AvailabilityMixin (being "unavailable"
+    makes no sense for it - even "offline" is valid information). It is
+    updated by polling (should_poll=True), reading the live state of
+    MySairMQTTClient directly.
     """
 
     _attr_should_poll = True
@@ -86,10 +86,10 @@ class MySairMqttStatusSensor(SensorEntity):
 
 
 # ==========================================================
-# 🌡️ SENSOR DE TEMPERATURA ACTUAL
+# CURRENT TEMPERATURE SENSOR
 # ==========================================================
 class MySairTempSensor(AvailabilityMixin, SensorEntity):
-    """Mide la temperatura actual de la zona."""
+    """Current temperature of the zone."""
 
     _attr_has_entity_name = True
 
@@ -104,7 +104,7 @@ class MySairTempSensor(AvailabilityMixin, SensorEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_temp_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._state = None
         self._unsub = None
         self._init_availability()
@@ -132,17 +132,15 @@ class MySairTempSensor(AvailabilityMixin, SensorEntity):
         new_val = zone.get("temp_actual")
         if new_val != self._state:
             self._state = new_val
-            _LOGGER.debug(
-                f"[MySair Sensor] 🌡️ {self._zone_name} temperature: {new_val}°C"
-            )
+            _LOGGER.debug(f"[MySair Sensor] {self._zone_name} temperature: {new_val}°C")
         self.async_write_ha_state()
 
 
 # ==========================================================
-# 🎯 SENSOR DE TEMPERATURA DE CONSIGNA
+# TARGET TEMPERATURE SENSOR
 # ==========================================================
 class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
-    """Muestra la temperatura de consigna actual."""
+    """Current target temperature (setpoint) of the zone."""
 
     _attr_has_entity_name = True
 
@@ -156,7 +154,7 @@ class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_setpoint_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._state = None
         self._unsub = None
         self._init_availability()
@@ -185,13 +183,13 @@ class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
         if new_val != self._state:
             self._state = new_val
             _LOGGER.debug(
-                f"[MySair Sensor] 🎯 {self._zone_name} target temperature: {new_val}°C"
+                f"[MySair Sensor] {self._zone_name} target temperature: {new_val}°C"
             )
         self.async_write_ha_state()
 
 
 # ==========================================================
-# 🔄 SENSOR DE MODO HVAC
+# HVAC MODE SENSOR
 # ==========================================================
 class MySairModeSensor(AvailabilityMixin, SensorEntity):
     """Current zone mode and, as attribute ``medium``, the active medium.
@@ -213,7 +211,7 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_mode_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._state = "off"
         self._medium = None
         self._unsub = None
@@ -243,7 +241,7 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
     @callback
     def _handle_zone_update(self, zone):
         self._mark_status_received()
-        # 'e' = encendido; calor/frío = paridad de 'm'. Ver docs/protocol-findings.md.
+        # 'e' = power; heat/cool = parity of 'm'. See docs/protocol-findings.md.
         new_state = "off"
         if zone.get("is_on"):
             if zone.get("is_cool"):
@@ -254,11 +252,11 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
                 new_state = "on"
         if new_state != self._state:
             self._state = new_state
-            _LOGGER.debug(f"[MySair Sensor] 🔄 {self._zone_name} mode: {self._state}")
+            _LOGGER.debug(f"[MySair Sensor] {self._zone_name} mode: {self._state}")
 
-        # Medio activo (F4/AC-vs-suelo): 'm' distingue AC-solo/suelo-solo/mixto
-        # con independencia de encendido/apagado (se conserva aunque la zona
-        # esté apagada). Ver docs/protocol-findings.md §4.
+        # Active medium (F4, air vs. floor): 'm' distinguishes air only, floor
+        # only or both, independent of power (kept while the zone is off).
+        # See docs/protocol-findings.md §4.
         if zone.get("is_ac") and zone.get("is_floor"):
             self._medium = "air_and_floor"
         elif zone.get("is_floor"):
@@ -272,7 +270,7 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
 
 
 # ==========================================================
-# 💧 SENSOR DE HUMEDAD
+# HUMIDITY SENSOR
 # ==========================================================
 class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
     """Relative humidity of the zone (see ``status_parser.parse_humidity``).
@@ -292,7 +290,7 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_humidity_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._state = None
         self._unsub = None
         self._init_availability()
@@ -320,5 +318,5 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
         new_val = zone.get("humidity")
         if new_val != self._state:
             self._state = new_val
-            _LOGGER.debug(f"[MySair Sensor] 💧 {self._zone_name} humidity: {new_val}%")
+            _LOGGER.debug(f"[MySair Sensor] {self._zone_name} humidity: {new_val}%")
         self.async_write_ha_state()

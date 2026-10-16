@@ -1,22 +1,21 @@
-"""Coordinador de eventos MQTT por config entry (refactor de eficiencia, C1).
+"""Per-config-entry coordinator for MQTT events (efficiency refactor, C1).
 
-Antes: cada entidad (climate/sensor/switch) se suscribía por su cuenta al
-evento de bus `f"{DOMAIN}_update"` y repetía el mismo filtrado manual de
-topic/ctl/zone_id sobre la lista completa de zonas del mensaje. Con N zonas
-y 6 entidades por zona, un solo mensaje MQTT disparaba 6×N listeners que
-recorrían la misma lista de arriba a abajo.
+Before: every entity (climate/sensor/switch) subscribed to the bus event
+`f"{DOMAIN}_update"` on its own and repeated the same manual filtering by
+topic/ctl/zone_id over the full zone list of the message. With N zones and
+6 entities per zone, a single MQTT message triggered 6×N listeners walking
+the same list from top to bottom.
 
-Ahora: una única instancia de `MySairCoordinator` por config entry escucha
-`f"{DOMAIN}_update"` una sola vez, filtra por sufijo de topic e instalaciones
-propias, y redistribuye cada zona por separado vía
-`homeassistant.helpers.dispatcher` con una señal específica por (ctl,
-zone_id). Cada entidad se suscribe solo a su propia señal: ya no repite el
-filtrado, recibe directamente su zona ya aislada.
+Now: a single `MySairCoordinator` instance per config entry listens to
+`f"{DOMAIN}_update"` once, filters by topic suffix and its own
+installations, and redistributes each zone separately via
+`homeassistant.helpers.dispatcher` with a dedicated signal per (ctl,
+zone_id). Each entity subscribes only to its own signal: it no longer
+repeats the filtering and directly receives its already isolated zone.
 
-El evento `f"{DOMAIN}_update"` (disparado desde `mqtt_message_callback` en
-`__init__.py`, sin cambios) sigue siendo el único punto de entrada: tanto el
-MQTT real como los tests (`_fire_status` en test_entities.py) funcionan igual
-que antes.
+The `f"{DOMAIN}_update"` event (fired by `mqtt_message_callback` in
+`__init__.py`, unchanged) is still the only entry point: both real MQTT and
+the tests (`_fire_status` in test_entities.py) work as before.
 """
 
 import logging
@@ -28,43 +27,43 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# Prefijo de señal del dispatcher: detalle interno de este mecanismo (solo lo
-# usan este módulo y las entidades), no una constante de protocolo/dominio,
-# así que vive aquí y no en const.py.
+# Dispatcher signal prefix: an internal detail of this mechanism (only used by
+# this module and the entities), not a protocol/domain constant, so it lives
+# here rather than in const.py.
 _SIGNAL_ZONE_UPDATE = f"{DOMAIN}_zone_update"
 
 
 def signal_zone_update(inst_ref: str, device_id: str) -> str:
-    """Nombre de señal del dispatcher para una zona concreta.
+    """Dispatcher signal name for a specific zone.
 
-    Cada entidad de una zona (climate/sensor/switch) se suscribe a esta
-    misma señal para recibir solo los datos de su propia zona, ya
-    filtrados y aislados por el coordinador.
+    Every entity of a zone (climate/sensor/switch) subscribes to this same
+    signal to receive only the data of its own zone, already filtered and
+    isolated by the coordinator.
     """
     return f"{_SIGNAL_ZONE_UPDATE}_{inst_ref}_{device_id}"
 
 
 class MySairCoordinator:
-    """Redistribuye los mensajes `status` de una config entry por zona.
+    """Redistribute the `status` messages of a config entry per zone.
 
-    Sustituye las N×6 suscripciones directas al bus (una por entidad) por
-    una única suscripción por config entry; ver docstring del módulo.
+    Replaces the N×6 direct bus subscriptions (one per entity) with a single
+    subscription per config entry; see the module docstring.
     """
 
     def __init__(self, hass: HomeAssistant, installation_refs: list) -> None:
         self.hass = hass
         self._installation_refs = set(installation_refs)
-        self._zones = {}  # (ctl, zone_id) -> último dict de zona recibido
+        self._zones = {}  # (ctl, zone_id) -> last zone dict received
         self._unsub = None
 
     def start(self) -> None:
-        """Se suscribe al evento `mysair_update` (una sola vez por entry)."""
+        """Subscribe to the `mysair_update` event (once per entry)."""
         self._unsub = self.hass.bus.async_listen(
             f"{DOMAIN}_update", self._handle_update
         )
 
     def stop(self) -> None:
-        """Cancela la suscripción al bus."""
+        """Cancel the bus subscription."""
         if self._unsub:
             self._unsub()
             self._unsub = None
@@ -86,6 +85,6 @@ class MySairCoordinator:
                 continue
             self._zones[(ctl, zone_id)] = zone
             _LOGGER.debug(
-                f"[MySair Coordinator] 📨 Zona {ctl}/{zone_id} actualizada, redistribuyendo"
+                f"[MySair Coordinator] Zone {ctl}/{zone_id} updated, dispatching"
             )
             async_dispatcher_send(self.hass, signal_zone_update(ctl, zone_id), zone)
