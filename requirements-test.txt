@@ -1,11 +1,11 @@
-# Dependencias para los tests que NO requieren Home Assistant (P0/P1).
-# Ejecutar: pip install -r requirements-test.txt && pytest
+# Dependencies for the tests that do NOT need Home Assistant (P0/P1).
+# Run: pip install -r requirements-test.txt && pytest
 pytest>=7.4
 requests>=2.31.0
 websocket-client==1.8.0
 freezegun>=1.2
 
-# Los tests P2 con harness de Home Assistant (config flow, setup/unload) NO se
-# instalan aquí: requieren Python >= 3.12 y corren vía Docker para no tocar la
-# máquina del desarrollador. Ver Dockerfile.test, docker-compose.yml,
-# requirements-test-ha.txt y docs/testing-strategy.md.
+# The P2 tests with the Home Assistant test harness (config flow, setup/unload,
+# entities) are NOT installed here: they need Python >= 3.14 and run via Docker
+# so the developer's machine stays untouched. See Dockerfile.test,
+# docker-compose.yml, requirements-test-ha.txt and docs/testing-strategy.md.

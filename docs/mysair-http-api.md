@@ -137,7 +137,7 @@ Die Erkennungsmethoden geben Fehler als `MySairAuthError`/`MySairConnectionError
 ]
 ```
 
-Fehlen die AWS-Zugangsdaten, setzt der Code für `app` einen festen Ersatzwert ein.
+`app` ist die Kennung des eigenen Kontos (`aws_mqtt_user`). Sind die AWS-Zugangsdaten noch nicht geladen, holt `MySairAPI._app_name` sie vor dem Senden; scheitert das, wird der Befehl nicht gesendet. Einen festen Ersatzwert gibt es nicht, weil er ein fremdes Konto bezeichnen würde.
 
 **Vollständiger Befehlskatalog (BESTÄTIGT aus der offiziellen App – siehe `docs/protocol-findings.md`):**
 

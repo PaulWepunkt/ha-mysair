@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Validación de HACS
+    name: HACS validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -35,7 +35,7 @@
       "fields": {
         "installation_ref": {
           "name": "Referencia de instalación",
-          "description": "Referencia (ctl) de la instalación a detener, tal como aparece entre paréntesis en el nombre del dispositivo de sus entidades (por ejemplo \"MYS94B97E0C9177FB6\")."
+          "description": "Referencia (ctl) de la instalación a detener, empieza por \"MYS\". Aparece en la descarga de diagnóstico de la integración."
         }
       }
     }

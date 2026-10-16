@@ -11,6 +11,13 @@ def _api(session):
     return MySairAPI("user@example.com", "secret", session=session)
 
 
+def _api_with_aws(session):
+    """API whose AWS credentials are already loaded (normal state after startup)."""
+    api = _api(session)
+    api.aws_credentials = {"aws_mqtt_user": "web0000"}
+    return api
+
+
 # --- LOGIN ---
 
 
@@ -293,12 +300,12 @@ def test_send_instruction_401_without_refresh_token_raises(fake_session, make_re
 
 def test_send_zone_command_mode(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_zone_command("INST", "DEV", "mode", "0", 21.0)
+    _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", "0", 21.0)
     body = fake_session.calls[-1]["json"][0]
     assert body == {
         "sender": "WEB",
         "ctl": "INST",
-        "app": "web0077",  # no aws_credentials → fallback
+        "app": "web0000",
         "device": "DEV",
         "command": "mode",
         "value": {"mode": "0", "temperature": "21.0"},
@@ -307,7 +314,7 @@ def test_send_zone_command_mode(fake_session, make_response):
 
 def test_send_zone_command_temp(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_zone_command("INST", "DEV", "temp", 22.5)
+    _api_with_aws(fake_session).send_zone_command("INST", "DEV", "temp", 22.5)
     body = fake_session.calls[-1]["json"][0]
     assert body["command"] == "temp"
     assert body["value"] == "22.5"
@@ -315,7 +322,7 @@ def test_send_zone_command_temp(fake_session, make_response):
 
 def test_send_zone_command_power(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_zone_command("INST", "DEV", "power")
+    _api_with_aws(fake_session).send_zone_command("INST", "DEV", "power")
     body = fake_session.calls[-1]["json"][0]
     assert body["command"] == "power"
     assert body["value"] == "0"
@@ -323,7 +330,7 @@ def test_send_zone_command_power(fake_session, make_response):
 
 def test_send_zone_command_fanspeed(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_zone_command("INST", "DEV", "fanspeed", "4")
+    _api_with_aws(fake_session).send_zone_command("INST", "DEV", "fanspeed", "4")
     body = fake_session.calls[-1]["json"][0]
     assert body["command"] == "fanspeed"
     assert body["value"] == "4"
@@ -331,30 +338,49 @@ def test_send_zone_command_fanspeed(fake_session, make_response):
 
 def test_send_zone_command_fanspeed_invalid_value_raises(fake_session):
     with pytest.raises(ValueError):
-        _api(fake_session).send_zone_command("INST", "DEV", "fanspeed", "9")
+        _api_with_aws(fake_session).send_zone_command("INST", "DEV", "fanspeed", "9")
 
 
 def test_send_zone_command_invalid_mode_raises(fake_session):
     with pytest.raises(ValueError):
-        _api(fake_session).send_zone_command("INST", "DEV", "mode", "5")
+        _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", "5")
 
 
 def test_send_zone_command_missing_params_raises(fake_session):
     with pytest.raises(ValueError):
-        _api(fake_session).send_zone_command("", "DEV", "power")
+        _api_with_aws(fake_session).send_zone_command("", "DEV", "power")
 
 
-# --- send_installation_command (F5, servicio stop_installation) ---
+def test_send_zone_command_fetches_aws_credentials_when_missing(
+    fake_session, make_response, aws_credentials_ok
+):
+    fake_session.queue("put", make_response(200, aws_credentials_ok))
+    fake_session.queue("post", _creado(make_response))
+    _api(fake_session).send_zone_command("INST", "DEV", "power")
+    assert [c["method"] for c in fake_session.calls] == ["put", "post"]
+    assert fake_session.calls[-1]["json"][0]["app"] == "web0000"
+
+
+def test_send_zone_command_not_sent_when_aws_credentials_fail(
+    fake_session, make_response
+):
+    fake_session.queue("put", make_response(503, text="down"))
+    with pytest.raises(MySairConnectionError):
+        _api(fake_session).send_zone_command("INST", "DEV", "power")
+    assert [c["method"] for c in fake_session.calls] == ["put"]
+
+
+# --- send_installation_command (F5, stop_installation service) ---
 
 
 def test_send_installation_command_stop(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_installation_command("INST", "stop")
+    _api_with_aws(fake_session).send_installation_command("INST", "stop")
     body = fake_session.calls[-1]["json"][0]
     assert body == {
         "sender": "WEB",
         "ctl": "INST",
-        "app": "web0077",
+        "app": "web0000",
         "device": "",
         "command": "stop",
         "value": "1",
@@ -363,7 +389,7 @@ def test_send_installation_command_stop(fake_session, make_response):
 
 def test_send_installation_command_status(fake_session, make_response):
     fake_session.queue("post", _creado(make_response))
-    _api(fake_session).send_installation_command("INST", "status")
+    _api_with_aws(fake_session).send_installation_command("INST", "status")
     body = fake_session.calls[-1]["json"][0]
     assert body["command"] == "status"
     assert body["value"] == "sync"
@@ -371,12 +397,12 @@ def test_send_installation_command_status(fake_session, make_response):
 
 def test_send_installation_command_invalid_type_raises(fake_session):
     with pytest.raises(ValueError):
-        _api(fake_session).send_installation_command("INST", "bogus")
+        _api_with_aws(fake_session).send_installation_command("INST", "bogus")
 
 
 def test_send_installation_command_missing_ctl_raises(fake_session):
     with pytest.raises(ValueError):
-        _api(fake_session).send_installation_command("", "stop")
+        _api_with_aws(fake_session).send_installation_command("", "stop")
 
 
 # --- extract_order_id (E7, command confirmation) ---

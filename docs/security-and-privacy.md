@@ -15,7 +15,7 @@
 | AWS-IoT-Zugangsdaten (`aws_access_key_id`, `aws_secret_access_key`, `aws_security_token`) | `MySairAPI.aws_credentials` | Nur Speicher | 🟡 Mittel (temporär) | Bestätigt (`refresh_aws_credentials`) |
 | Signierte MQTT-URL (enthält Zugangsdaten + Signatur) | Lokale Variable in `_run` | Nur Speicher; wird **nirgends geloggt** (nur `host`) | 🟢 Gering | Bestätigt (`mqtt_handler.py`) |
 
-**Im Repository sind keine Geheimnisse fest hinterlegt.** Fest eingetragen sind nur der öffentliche Host `https://api.mysair.es/v1` (kein Geheimnis) und ein Ersatzwert für das Feld `app` in `send_zone_command`/`send_installation_command` (Client-Kennung, kein Geheimnis). **Bestätigt.**
+**Im Repository sind keine Geheimnisse fest hinterlegt.** Fest eingetragen ist nur der öffentliche Host `https://api.mysair.es/v1` (kein Geheimnis). Kennungen echter Konten oder Anlagen kommen weder im Code noch in Tests oder Beispielen vor; Beispiele nutzen Platzhalter wie `web0000` oder `MYS000000000000000`. **Bestätigt.**
 
 ---
 

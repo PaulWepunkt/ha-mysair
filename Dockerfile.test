@@ -1,7 +1,7 @@
-# Imagen para correr los tests P2 (harness de Home Assistant) sin instalar
-# nada en la máquina del desarrollador. Ver docs/testing-strategy.md.
+# Image for running the P2 tests (Home Assistant test harness) without
+# installing anything on the developer's machine. See docs/testing-strategy.md.
 #
-# La versión de Python la marca Home Assistant: 2026.9 exige >= 3.14.2.
+# The Python version is dictated by Home Assistant: 2026.9 requires >= 3.14.2.
 FROM python:3.14-slim
 
 WORKDIR /workspace

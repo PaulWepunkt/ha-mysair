@@ -1,2 +1,2 @@
-# Dependencia de lint/formato (ver pyproject.toml para la configuración).
+# Lint/format dependency (see pyproject.toml for the configuration).
 ruff==0.15.22

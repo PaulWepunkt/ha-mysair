@@ -18,7 +18,7 @@
 | `dependencies` | `[]` | ✅ |
 | `requirements` | `requests`, `websocket-client` | ✅ nur tatsächlich genutzte Bibliotheken |
 | `quality_scale` | `silver` | ✅ von `hassfest` akzeptiert |
-| `documentation`, `issue_tracker`, `codeowners` | verweisen auf das Ursprungs-Repository | 🟡 für diesen Fork anzupassen |
+| `documentation`, `issue_tracker`, `codeowners` | verweisen auf dieses Repository | ✅ |
 | `version` | SemVer | ✅ (für Custom-Integrationen Pflicht) |
 
 Die Mindestversion von Home Assistant (≥ 2026.8.0) steht in `hacs.json` und im README; im Manifest einer Custom-Integration ist die Angabe nicht zulässig.
@@ -45,7 +45,6 @@ Die Mindestversion von Home Assistant (≥ 2026.8.0) steht in `hacs.json` und im
 - Die periodische Abfrage läuft als `entry.async_create_background_task` und wird beim Entladen automatisch beendet. ✅
 - `async_unload_entry` steht auf Modulebene, entlädt die Plattformen, stoppt MQTT-Client und Koordinator und räumt `hass.data` auf. ✅
 - Reload erzeugt weder doppelte Entitäten noch einen doppelten Dienst (getestet). ✅
-- 🟡 Zwei Meldungen von `ConfigEntryNotReady` sind noch spanisch formuliert; sie erscheinen nur im Log bzw. in der Fehlermeldung der Integration.
 
 ---
 
@@ -151,6 +150,4 @@ Der Pin in `requirements-test-ha.txt` muss mit der produktiv genutzten HA-Versio
 
 1. 🔴 Erfolgsprüfung von `/send/instruction` sprachunabhängig machen.
 2. 🟡 Fehler bei Befehlen als übersetzte `HomeAssistantError` an die Oberfläche geben.
-3. 🟡 Verweise im Manifest (`documentation`, `issue_tracker`, `codeowners`) auf den Fork anpassen.
-4. 🟡 Restliche spanische Texte in Code- und Konfigurationsdateien vereinheitlichen.
-5. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.
+3. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.

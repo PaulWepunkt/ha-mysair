@@ -96,7 +96,7 @@ async def test_coordinator_ignores_non_status_topic(hass, monkeypatch):
     hass.bus.async_fire(
         f"{DOMAIN}_update",
         {
-            "topic": "pro/v1/get/usr/web0077/feedback",
+            "topic": "pro/v1/get/usr/web0000/feedback",
             "data": {"ctl": "INST_A", "zones": [_zone()]},
         },
     )

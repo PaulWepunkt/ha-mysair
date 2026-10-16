@@ -1,17 +1,16 @@
 stop_installation:
-  name: Detener instalación
+  name: Stop installation
   description: >-
-    Detiene una instalación MySair completa (todas sus zonas de golpe),
-    usando el comando "stop" del backend. Distinto de apagar cada zona por
-    separado con el switch o el climate.
+    Stops an entire MySair installation (all its zones at once) using the
+    backend's "stop" command. Different from turning off each zone
+    individually with a switch or climate entity.
   fields:
     installation_ref:
-      name: Referencia de instalación
+      name: Installation reference
       description: >-
-        Referencia (ctl) de la instalación a detener, tal como aparece entre
-        paréntesis en el nombre del dispositivo de sus entidades (por
-        ejemplo "MYS94B97E0C9177FB6").
+        Reference (ctl) of the installation to stop, starting with "MYS".
+        It is listed in the integration's diagnostics download.
       required: true
-      example: "MYS94B97E0C9177FB6"
+      example: "MYS000000000000000"
       selector:
         text:

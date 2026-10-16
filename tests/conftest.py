@@ -43,6 +43,30 @@ if _HA_TEST_HARNESS_AVAILABLE:
             _test_custom_components.__path__.append(our_custom_components_dir)
         yield
 
+    @pytest.fixture(autouse=True)
+    def no_network_from_background_tasks(auto_enable_custom_integrations, monkeypatch):
+        """Keep the integration's background traffic off the network.
+
+        After a successful setup, the periodic status task sends an
+        instruction and, since the MQTT client is patched out, first fetches
+        the AWS credentials. Neither is the subject of the harness tests, but
+        both would open a real socket. Tests that care about these calls
+        patch them again themselves (their monkeypatch wins).
+        """
+        from custom_components.mysair.api import MySairAPI
+
+        def _fake_aws_credentials(self):
+            self.aws_credentials = {"aws_mqtt_user": "web0000"}
+            return self.aws_credentials
+
+        monkeypatch.setattr(MySairAPI, "refresh_aws_credentials", _fake_aws_credentials)
+        monkeypatch.setattr(
+            MySairAPI,
+            "send_instruction",
+            lambda self, instruction: {"msg": "Creado", "error": []},
+        )
+        yield
+
 
 class FakeResponse:
     """Minimal stand-in for requests.Response."""
@@ -79,7 +103,7 @@ class FakeSession:
         self.calls.append({"method": method, "url": url, **kwargs})
         queue = self.responses[method]
         if not queue:
-            raise AssertionError(f"Sin respuesta encolada para {method.upper()} {url}")
+            raise AssertionError(f"No queued response for {method.upper()} {url}")
         return queue.pop(0)
 
     def request(self, method, url, **kwargs):

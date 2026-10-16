@@ -101,7 +101,6 @@
 - **Erfolgsprüfung von `/send/instruction` sprachunabhängig machen** (`msg` „Creado“/„Created“) – 🔴, siehe `docs/mysair-http-api.md` §3.1.
 - **Schutz vor widersprüchlicher Heiz-/Kühlrichtung** für Anlagen, deren Außeneinheit nur eine Richtung für alle Zonen kann – 🟠.
 - **Fehler bei Befehlen sichtbar machen** (`HomeAssistantError` mit übersetzter Meldung) – 🟡.
-- **Verweise im Manifest** (`documentation`, `issue_tracker`, `codeowners`) auf den Fork anpassen – 🟡.
 - **Tests für doppelte/vertauschte MQTT-Nachrichten** und für `account_mismatch` im Reauth – 🟢.
 - **Uninterpretierte Zonenfelder** `vf`/`hmh`/`mh`/`p`/`ps` – nur mit neuen Belegen (`known-unknowns.md` §6).
 - **Paketdecoder (E1/E2) mit echtem Datenverkehr bestätigen** – bisher nur mit synthetischen Bytes getestet.

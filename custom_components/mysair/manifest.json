@@ -1,13 +1,13 @@
 {
   "domain": "mysair",
   "name": "MySair",
-  "codeowners": ["@jclgranados"],
+  "codeowners": ["@PaulWepunkt"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/jclgranados/homeassistant-mysair",
+  "documentation": "https://github.com/PaulWepunkt/ha-mysair",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/jclgranados/homeassistant-mysair/issues",
+  "issue_tracker": "https://github.com/PaulWepunkt/ha-mysair/issues",
   "loggers": ["mysair"],
   "quality_scale": "silver",
   "requirements": [

@@ -248,7 +248,6 @@ Offen:
 - 🔴 **Erfolgsprüfung von `/send/instruction`** erwartet `msg == "Creado"`; englischsprachige Konten erhalten `"Created"` (`docs/mysair-http-api.md` §3.1).
 - 🟠 **Widersprüchliche Heiz-/Kühlrichtung** zwischen Zonen wird nicht verhindert.
 - 🟡 **Fehler bei Befehlen** erscheinen nur im Log, nicht in der Oberfläche.
-- 🟡 **Verweise im Manifest** zeigen noch auf das Ursprungs-Repository.
 - 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
 - 🟡 **Uninterpretierte Zonenfelder** `vf`, `hmh`, `mh`, `p`, `ps` (`docs/known-unknowns.md`).
 

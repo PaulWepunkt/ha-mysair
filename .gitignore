@@ -17,7 +17,7 @@ build/
 .idea/
 .DS_Store
 
-# Nunca versionar secretos ni capturas de tráfico/protocolo
+# Never commit secrets or traffic/protocol captures
 .env
 .env.*
 secrets.*
