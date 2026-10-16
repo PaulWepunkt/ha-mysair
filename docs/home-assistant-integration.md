@@ -16,7 +16,7 @@
 | `iot_class` | `cloud_push` | ✅ Push per MQTT; die zusätzliche Abfrage alle 120 s löst nur eine Push-Meldung aus |
 | `integration_type` | `hub` | ✅ |
 | `dependencies` | `[]` | ✅ |
-| `requirements` | `requests`, `websocket-client` | ✅ nur tatsächlich genutzte Bibliotheken |
+| `requirements` | `websocket-client` | ✅ `requests` wird genutzt, gehört aber zu Home Assistant selbst und darf laut `hassfest` nicht eingetragen werden |
 | `quality_scale` | `silver` | ✅ von `hassfest` akzeptiert |
 | `documentation`, `issue_tracker`, `codeowners` | verweisen auf dieses Repository | ✅ |
 | `version` | SemVer | ✅ (für Custom-Integrationen Pflicht) |

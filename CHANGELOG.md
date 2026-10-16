@@ -28,6 +28,7 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - Beschreibung des Felds „Anlagenreferenz“ im Dienst `mysair.stop_installation`: Die Referenz steht im Diagnose-Download (seit den neuen Gerätenamen nicht mehr im Gerätenamen). Beispielwerte sind neutrale Platzhalter.
 
 ### Fixed
+- `manifest.json`: `requests` aus `requirements` entfernt. Home Assistant bringt die Bibliothek selbst mit, und `hassfest` lässt sie im Manifest einer Custom-Integration nicht mehr zu. Keine Änderung am Verhalten.
 - **Befehle ohne geladene AWS-Zugangsdaten** wurden mit einer fest eingetragenen, fremden Kontokennung im Feld `app` gesendet. Jetzt werden die Zugangsdaten vorher geholt und die eigene Kennung verwendet; gelingt das nicht, wird der Befehl nicht gesendet.
 - Tests mit HA-Testumgebung öffnen keine Netzwerkverbindungen mehr (periodische Abfrage und Einrichtungsdialog), wodurch Fehler beim Aufräumen nach einzelnen Tests entfallen.
 - **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).
