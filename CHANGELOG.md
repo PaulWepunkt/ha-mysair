@@ -8,6 +8,12 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-17
+
+Erstes Release dieses Forks.
+
+> ⚠️ **Vor dem Update lesen:** Der Modus-Sensor liefert neue Zustandswerte (`off`/`heat`/`cool`/`on`) und das Attribut heißt jetzt `medium`. Automationen und Dashboards, die auf die alten Werte (`OFF`/`HEAT`/…, `medio`) prüfen, müssen angepasst werden. Bestehende Entity-IDs bleiben erhalten.
+
 ### Added
 - **Bedienoberfläche auf Deutsch, Englisch und Spanisch.** Entitätsnamen, Zustände und Symbole kommen jetzt aus den Übersetzungs- und Symboldateien von Home Assistant (`translations/*.json`, `icons.json`) statt aus festen spanischen Texten. Angezeigt wird die in Home Assistant eingestellte Sprache. Neu: `translations/de.json` für Entitäten, Einrichtungsdialog und den Dienst „Anlage stoppen“.
 - Temperatur- und Feuchtesensor tragen keinen eigenen Namen mehr: Home Assistant benennt sie über ihre Geräteklasse („Temperatur“, „Luftfeuchtigkeit“) und wählt das passende Standardsymbol.
