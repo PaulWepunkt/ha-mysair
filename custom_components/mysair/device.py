@@ -27,7 +27,7 @@ def zone_device_info(inst_ref: str, device_id: str, zone_name: str) -> DeviceInf
         identifiers={(DOMAIN, f"{inst_ref}_{device_id}")},
         name=zone_name,
         manufacturer="MySair",
-        model="Zonificador de climatización",
+        model="Klima-Zonenregler",
     )
 
 
@@ -42,5 +42,5 @@ def account_device_info(entry_id: str) -> DeviceInfo:
         identifiers={(DOMAIN, entry_id)},
         name="MySair",
         manufacturer="MySair",
-        model="Integración",
+        model="Integration",
     )

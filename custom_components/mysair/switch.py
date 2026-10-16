@@ -40,7 +40,7 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
     """Entidad Switch para encender o apagar cada termostato MySair."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:power"
+    _attr_translation_key = "power"
 
     def __init__(self, hass, api, mqtt_client, inst_ref, device_id, name):
         self.hass = hass
@@ -49,7 +49,6 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self.inst_ref = inst_ref
         self.device_id = device_id
         self._attr_unique_id = f"mysair_switch_{inst_ref}_{device_id}"
-        self._attr_name = "Encendido"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
         self._is_on = False
@@ -146,7 +145,7 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
     """
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:heat-wave"
+    _attr_translation_key = "floor_heating"
 
     def __init__(self, hass, api, mqtt_client, inst_ref, device_id, name):
         self.hass = hass
@@ -155,7 +154,6 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self.inst_ref = inst_ref
         self.device_id = device_id
         self._attr_unique_id = f"mysair_floor_{inst_ref}_{device_id}"
-        self._attr_name = "Suelo radiante"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
         self._is_on = False

@@ -8,6 +8,17 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 > Ab dieser Version werden Änderungen auf Deutsch dokumentiert.
 
+### Added
+- **Bedienoberfläche auf Deutsch, Englisch und Spanisch.** Entitätsnamen, Zustände und Symbole kommen jetzt aus den Übersetzungs- und Symboldateien von Home Assistant (`translations/*.json`, `icons.json`) statt aus festen spanischen Texten. Angezeigt wird die in Home Assistant eingestellte Sprache. Neu: `translations/de.json` für Entitäten, Einrichtungsdialog und den Dienst „Anlage stoppen“.
+- Temperatur- und Feuchtesensor tragen keinen eigenen Namen mehr: Home Assistant benennt sie über ihre Geräteklasse („Temperatur“, „Luftfeuchtigkeit“) und wählt das passende Standardsymbol.
+- Der Modus-Sensor ist ein Aufzählungssensor (`enum`); Zustände und das Attribut `medium` werden übersetzt angezeigt.
+- Der Sensor „Cloud-Verbindung“ ist als Diagnose-Entität eingestuft und erscheint dadurch nicht mehr in Standard-Dashboards.
+
+### Changed
+- **Inkompatibel – Werte des Modus-Sensors:** Zustände lauten `off`/`heat`/`cool`/`on` statt `OFF`/`HEAT`/`COOL`/`ON`. Das Attribut heißt `medium` (Werte `air`/`floor`/`air_and_floor`) statt `medio` (`ac`/`suelo`/`mixto`). Automationen, die auf die alten Werte prüfen, müssen angepasst werden.
+- Gerätemodell der Zonen: „Klima-Zonenregler“, des Kontogeräts: „Integration“.
+- Bestehende Entity-IDs bleiben erhalten. Bei einer Neueinrichtung erzeugt Home Assistant die IDs aus den Namen in der eingestellten Sprache (z. B. `sensor.<zone>_luftfeuchtigkeit`).
+
 ### Fixed
 - **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).
 

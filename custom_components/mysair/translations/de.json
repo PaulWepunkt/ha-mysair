@@ -1,0 +1,84 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MySair",
+        "description": "Mit den Zugangsdaten deines MySair-Kontos anmelden.",
+        "data": {
+          "email": "E-Mail",
+          "password": "Passwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "MySair erneut anmelden",
+        "description": "Die Sitzung für {email} ist abgelaufen oder ungültig. Gib dein Passwort erneut ein, um fortzufahren.",
+        "data": {
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "E-Mail oder Passwort ungültig.",
+      "cannot_connect": "Keine Verbindung zu MySair möglich. Bitte später erneut versuchen.",
+      "unknown": "Unerwarteter Fehler."
+    },
+    "abort": {
+      "already_configured": "Dieses Konto ist bereits eingerichtet.",
+      "reauth_successful": "Erneute Anmeldung erfolgreich.",
+      "account_mismatch": "Das Konto stimmt nicht mit dem ursprünglich eingerichteten überein. Bitte mit demselben MySair-Konto anmelden."
+    }
+  },
+  "services": {
+    "stop_installation": {
+      "name": "Anlage stoppen",
+      "description": "Stoppt eine komplette MySair-Anlage (alle Zonen auf einmal) über den „stop“-Befehl des Servers. Anders als das Ausschalten einzelner Zonen über Schalter oder Thermostat.",
+      "fields": {
+        "installation_ref": {
+          "name": "Anlagenreferenz",
+          "description": "Referenz (ctl) der zu stoppenden Anlage, wie sie in Klammern im Gerätenamen ihrer Entitäten steht (z. B. „MYS…“)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cloud_connection": {
+        "name": "Cloud-Verbindung",
+        "state": {
+          "online": "Verbunden",
+          "offline": "Getrennt"
+        }
+      },
+      "target_temperature": {
+        "name": "Soll-Temperatur"
+      },
+      "mode": {
+        "name": "Modus",
+        "state": {
+          "off": "Aus",
+          "heat": "Heizen",
+          "cool": "Kühlen",
+          "on": "Ein"
+        },
+        "state_attributes": {
+          "medium": {
+            "name": "Medium",
+            "state": {
+              "air": "Luft",
+              "floor": "Fußboden",
+              "air_and_floor": "Luft und Fußboden"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Ein/Aus"
+      },
+      "floor_heating": {
+        "name": "Fußbodenheizung"
+      }
+    }
+  }
+}

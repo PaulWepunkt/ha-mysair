@@ -1,0 +1,36 @@
+{
+  "entity": {
+    "sensor": {
+      "cloud_connection": {
+        "default": "mdi:cloud-check",
+        "state": {
+          "offline": "mdi:cloud-off-outline"
+        }
+      },
+      "target_temperature": {
+        "default": "mdi:thermostat"
+      },
+      "mode": {
+        "default": "mdi:hvac",
+        "state": {
+          "off": "mdi:hvac-off",
+          "heat": "mdi:fire",
+          "cool": "mdi:snowflake"
+        }
+      }
+    },
+    "switch": {
+      "power": {
+        "default": "mdi:power"
+      },
+      "floor_heating": {
+        "default": "mdi:heat-wave"
+      }
+    }
+  },
+  "services": {
+    "stop_installation": {
+      "service": "mdi:stop-circle-outline"
+    }
+  }
+}
