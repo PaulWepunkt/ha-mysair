@@ -270,7 +270,10 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
 # 💧 SENSOR DE HUMEDAD
 # ==========================================================
 class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
-    """Muestra la humedad relativa de la zona (campo ``hm``)."""
+    """Relative humidity of the zone (see ``status_parser.parse_humidity``).
+
+    ``None`` (shown as "unknown" in HA) when the thermostat reports no value.
+    """
 
     _attr_has_entity_name = True
 

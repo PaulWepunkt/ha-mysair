@@ -6,6 +6,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Unreleased]
 
+> Ab dieser Version werden Änderungen auf Deutsch dokumentiert.
+
+### Fixed
+- **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).
+
+### Changed
+- **Luftfeuchte 0 wird als „unbekannt“ gemeldet statt als 0 %.** Eine echte Raumluftfeuchte von 0 % gibt es nicht; eine 0 bedeutet, dass das Thermostat keinen Feuchtesensor hat oder noch nicht gemessen hat. So landen keine falschen Nullen in der Langzeitstatistik oder lösen feuchtebasierte Automationen aus.
+
 ## [2.13.1] - 2026-09-12
 
 ### Fixed
