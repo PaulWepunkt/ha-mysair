@@ -1,255 +1,266 @@
-# Arquitectura — Integración MySair para Home Assistant
+# Architektur – MySair-Integration für Home Assistant
 
-> Convención de certeza usada en todo el documento:
-> **Confirmado** (leído en el código) · **Inferido** (deducido del flujo) · **Hipótesis** (razonable pero sin evidencia directa) · **Desconocido** (requiere dispositivo real).
-
----
-
-## 1. Resumen del sistema
-
-MySair es un sistema de **zonificación de climatización** (aire acondicionado y/o suelo radiante, combinables por zona — ver `m` en `docs/protocol-findings.md` §4) controlado desde la nube. Esta integración (custom component, dominio `mysair`) permite a Home Assistant:
-
-- Autenticarse contra la API HTTP de MySair (`https://api.mysair.es/v1`). **Confirmado** — `api.py:18`.
-- Descubrir la topología: *ubicaciones → instalaciones → dispositivos (termostatos/zonas)*. **Confirmado** — `__init__.py:34-55`.
-- Recibir estado en tiempo real por **MQTT sobre WebSocket** contra AWS IoT. **Confirmado** — `mqtt_handler.py`.
-- Enviar comandos (encender/apagar, temperatura, modo) vía HTTP `POST /send/instruction`. **Confirmado** — `api.py:192-230`.
-
-`iot_class` declarado: `cloud_push` (`manifest.json:10`). **Confirmado**, aunque en la práctica es *cloud_push híbrido con polling*: el estado se **recibe** por MQTT (push) pero se **provoca** con un `POST` HTTP cada 60 s (`__init__.py:151-171`).
-
-### Hecho arquitectónico clave (Confirmado)
-Los **comandos NO se publican por MQTT**. El cliente MQTT solo hace `CONNECT` + `SUBSCRIBE`; nunca `PUBLISH` (`mqtt_handler.py` no construye ningún paquete PUBLISH). Todo comando sale por HTTP a `/send/instruction`, y el backend de MySair es quien reenvía a los dispositivos y devuelve el estado por MQTT. La conexión MQTT es **solo de recepción**.
+> Gewissheitsstufen in diesem Dokument:
+> **Bestätigt** (im Code nachgelesen) · **Abgeleitet** (aus dem Ablauf geschlossen) · **Hypothese** (plausibel, ohne direkten Beleg) · **Unbekannt** (nur mit echtem Gerät zu klären).
+> Code-Verweise nennen Datei und Funktion statt Zeilennummern, da sich Zeilen bei jeder Änderung verschieben.
 
 ---
 
-## 2. Estructura del repositorio
+## 1. Systemüberblick
+
+MySair ist ein cloudgesteuertes **Klima-Zonensystem** (Klimaanlage und/oder Fußbodenheizung bzw. -kühlung, je Zone kombinierbar – siehe Feld `m` in `docs/protocol-findings.md` §4). Diese Integration (Custom Component, Domain `mysair`) ermöglicht Home Assistant:
+
+- die Anmeldung an der HTTP-API von MySair (`https://api.mysair.es/v1`) – **Bestätigt** (`api.py`, `MySairAPI`);
+- das Erkennen des Aufbaus: *Standorte → Installationen → Geräte (Thermostate/Zonen)* – **Bestätigt** (`__init__.py`, `async_setup_entry`);
+- den Empfang des Zustands in Echtzeit per **MQTT über WebSocket** von AWS IoT – **Bestätigt** (`mqtt_handler.py`);
+- das Senden von Befehlen (Ein/Aus, Temperatur, Modus, Lüfterstufe) per HTTP `POST /send/instruction` – **Bestätigt** (`api.py`, `send_instruction`, `send_zone_command`).
+
+Deklarierte `iot_class`: `cloud_push` (`manifest.json`). In der Praxis ist es ein *Cloud-Push mit zusätzlicher Abfrage*: Der Zustand **kommt** per MQTT (Push), wird aber zusätzlich alle 120 s per HTTP-`POST` **angestoßen** (`refresh_status_periodic` in `__init__.py`).
+
+### Zentrale Architekturtatsache (Bestätigt)
+Befehle werden **nicht per MQTT veröffentlicht**. Der MQTT-Client sendet nur `CONNECT` und `SUBSCRIBE`, nie `PUBLISH`. Jeder Befehl geht per HTTP an `/send/instruction`; das MySair-Backend leitet ihn an die Geräte weiter und liefert den Zustand per MQTT zurück. Die MQTT-Verbindung ist **reiner Empfang**.
+
+---
+
+## 2. Aufbau des Repositorys
 
 ```
-homeassistant-mysair/
-├── custom_components/mysair/     # Paquete de la integración (layout estándar HA/HACS)
-│   ├── __init__.py               # Setup/unload, callback MQTT, refresco periódico
-│   ├── api.py                    # MySairAPI: HTTP síncrono (requests) + firma AWS SigV4
-│   ├── status_parser.py          # Parser puro del payload 'status' (sin dependencia de HA)
-│   ├── mqtt_handler.py           # MySairMQTTClient: MQTT crudo sobre WebSocket
+ha-mysair/
+├── custom_components/mysair/     # Paket der Integration (Standardlayout HA/HACS)
+│   ├── __init__.py               # Setup/Unload, MQTT-Callback, periodische Abfrage, Dienst
+│   ├── api.py                    # MySairAPI: synchrones HTTP (requests) + AWS-SigV4-Signatur
+│   ├── status_parser.py          # Reine Parser für 'status' und 'feedback' (ohne HA-Abhängigkeit)
+│   ├── mqtt_handler.py           # MySairMQTTClient: MQTT von Hand über WebSocket
+│   ├── coordinator.py            # MySairCoordinator: verteilt Zustände je Zone
+│   ├── command_feedback.py       # Bestätigung von Befehlen über das feedback-Topic
+│   ├── availability.py           # Verfügbarkeit nach Aktualität der MQTT-Daten
+│   ├── device.py                 # Gemeinsame Geräteinformationen je Zone/Konto
 │   ├── climate.py                # MySairThermostat (ClimateEntity)
-│   ├── sensor.py                 # 3 sensores por zona (temp actual, consigna, modo)
-│   ├── switch.py                 # MySairSwitch (power on/off por zona)
-│   ├── config_flow.py            # Config flow (email + password)
-│   ├── const.py                  # Constantes (algunas sin uso)
-│   └── manifest.json             # Manifiesto de la integración
-│   # (select.py eliminado en estabilización — era código muerto/roto)
-├── tests/                        # Tests P0/P1 (no requieren HA) + fixtures sanitizadas
-├── docs/                         # (esta documentación)
-├── pytest.ini · requirements-test.txt
-└── README.md · CLAUDE.md
+│   ├── sensor.py                 # 4 Sensoren je Zone + Sensor „Cloud-Verbindung“
+│   ├── switch.py                 # Ein/Aus und Fußbodenheizung je Zone
+│   ├── config_flow.py            # Einrichtungsdialog (E-Mail + Passwort), Reauth
+│   ├── diagnostics.py            # Diagnose-Download mit geschwärzten Zugangsdaten
+│   ├── const.py                  # Konstanten
+│   ├── services.yaml             # Schema des Dienstes mysair.stop_installation
+│   ├── strings.json, translations/, icons.json, brand/
+│   └── manifest.json
+├── tests/                        # Tests ohne HA (P0/P1) und mit HA-Testumgebung (P2/P3)
+├── docs/                         # diese Dokumentation
+├── Dockerfile.test · docker-compose.yml · pytest.ini · pyproject.toml
+└── README.md · CLAUDE.md · CHANGELOG.md · LICENSE · hacs.json
 ```
-
-Nota (fase de estabilización): la integración se movió a `custom_components/mysair/`
-(layout estándar, habilita HACS y permite ejecutar los tests con `pytest`). Se añadió
-`tests/`; siguen sin existir `translations/`, `hacs.json`, `diagnostics.py` ni CI.
 
 ---
 
-## 3. Componentes y responsabilidades
+## 3. Komponenten und Zuständigkeiten
 
-| Componente | Archivo | Responsabilidad | Hilo/loop |
+| Komponente | Datei | Aufgabe | Thread/Loop |
 |---|---|---|---|
-| `async_setup_entry` | `__init__.py:17` | Orquesta login → descubrimiento → MQTT → plataformas → refresco | event loop + executor |
-| `mqtt_message_callback` | `__init__.py:67` | Parsea `status`, normaliza zonas, dispara evento `mysair_update` | hilo MQTT → `call_soon_threadsafe` |
-| `refresh_status_periodic` | `__init__.py:151` | Cada 60 s pide `status`/`sync` a cada instalación por HTTP | event loop task |
-| `MySairAPI` | `api.py:12` | Login, refresh tokens, credenciales AWS, descubrimiento, instrucciones, firma SigV4 | executor (bloqueante) |
-| `MySairMQTTClient` | `mqtt_handler.py:69` | Conexión WSS, CONNECT/SUBSCRIBE manuales, reconexión | hilo daemon propio |
-| `MySairCoordinator` | `coordinator.py` | Escucha `mysair_update` **una sola vez** por config entry, filtra por instalación propia y redistribuye cada zona por separado vía `homeassistant.helpers.dispatcher` (C1) | event loop |
-| Entidades | `climate/sensor/switch.py` | Se suscriben a la señal de dispatcher de su propia zona (`coordinator.signal_zone_update`), ya sin filtrar `ctl`/`zone_id`; actualizan estado | event loop |
+| `async_setup_entry` | `__init__.py` | Steuert Sitzungserneuerung → Erkennung → MQTT → Koordinator → Plattformen → periodische Abfrage | Event-Loop + Executor |
+| `mqtt_message_callback` | `__init__.py` | Wertet `status` und `feedback` aus, feuert `mysair_update` bzw. `mysair_feedback` | MQTT-Thread → `call_soon_threadsafe` |
+| `refresh_status_periodic` | `__init__.py` | Fordert alle 120 s per HTTP den Zustand jeder Installation an | Hintergrund-Task der Config Entry |
+| `MySairAPI` | `api.py` | Anmeldung, Token-Erneuerung, AWS-Zugangsdaten, Erkennung, Befehle, SigV4-Signatur | Executor (blockierend) |
+| `MySairMQTTClient` | `mqtt_handler.py` | WSS-Verbindung, CONNECT/SUBSCRIBE von Hand, Wiederverbindung mit Backoff, vorausschauende Erneuerung der Zugangsdaten | eigener Daemon-Thread |
+| `MySairCoordinator` | `coordinator.py` | Hört **einmal** je Config Entry auf `mysair_update`, filtert nach eigener Installation und verteilt jede Zone einzeln über `homeassistant.helpers.dispatcher` | Event-Loop |
+| Entitäten | `climate.py`, `sensor.py`, `switch.py` | Abonnieren das Dispatcher-Signal ihrer Zone (`signal_zone_update`) und aktualisieren ihren Zustand | Event-Loop |
 
-### Dependencias entre módulos (Confirmado)
+### Abhängigkeiten zwischen Modulen (Bestätigt)
 
 ```
-config_flow.py ─► api.py (login)
-__init__.py ─► api.py, mqtt_handler.py, const.py
-mqtt_handler.py ─► api.py (aws_credentials, aws_sign_url)
-climate/sensor/switch.py ─► const.py (DOMAIN)  y  hass.data[DOMAIN][entry_id]["api"]
+config_flow.py ─► api.py (Anmeldung)
+__init__.py ─► api.py, mqtt_handler.py, status_parser.py, coordinator.py, const.py
+mqtt_handler.py ─► api.py (AWS-Zugangsdaten, aws_sign_url)
+climate/sensor/switch.py ─► coordinator.py (Signal), device.py, availability.py, command_feedback.py
 ```
 
-Las entidades **no** conocen `MySairMQTTClient` directamente: se comunican con él a través del **event bus** de HA (`mysair_update`), pero ya no escuchan ese evento cada una por su cuenta — `MySairCoordinator` (C1) es el único suscriptor del bus por config entry, y redistribuye cada zona por separado a la entidad correspondiente vía `homeassistant.helpers.dispatcher`. Acoplamiento por evento + dispatcher. **Confirmado**.
+Die Entitäten kennen `MySairMQTTClient` **nicht** direkt. Der Weg ist: MQTT-Thread → Event-Bus (`mysair_update`) → `MySairCoordinator` (einziger Abonnent je Config Entry) → Dispatcher-Signal je Zone → Entität. **Bestätigt.**
 
 ---
 
-## 4. Origen de los datos: HTTP vs MQTT
+## 4. Datenherkunft: HTTP oder MQTT
 
-| Dato | Origen | Evidencia |
+| Daten | Herkunft | Beleg |
 |---|---|---|
-| Tokens de sesión | HTTP `POST /user/login` | `api.py:32-44` |
-| Credenciales AWS IoT | HTTP `PUT /user/refreshawscredentials` | `api.py:94-131` |
-| Ubicaciones / instalaciones / dispositivos (topología) | HTTP `GET /locations`, `/installations`, `/devices` | `api.py:140-187` |
-| Estado de zonas (temp actual, consigna, min/max, modo) | **MQTT** topic `.../status` | `__init__.py:95-108` |
-| Comandos (temp, mode, power) | HTTP `POST /send/instruction` | `api.py:192-230` |
-| Provocación de refresco de estado | HTTP `POST /send/instruction` (`command:status`) | `__init__.py:156-164` |
+| Sitzungstoken | HTTP `PUT /user/refreshtokens` (bei Einrichtung/Reauth: `POST /user/login`) | `api.py`: `refresh_tokens`, `login` |
+| AWS-IoT-Zugangsdaten | HTTP `PUT /user/refreshawscredentials` | `api.py`: `refresh_aws_credentials` |
+| Standorte / Installationen / Geräte | HTTP `GET /locations`, `/installations`, `/devices` | `api.py`: `get_locations`, `get_installations`, `get_devices` |
+| Zustand der Zonen (Temperaturen, Grenzwerte, Modus, Feuchte, Lüfter, Fähigkeiten) | **MQTT**-Topic `.../status` | `status_parser.parse_status_payload` |
+| Befehlsbestätigung | **MQTT**-Topic `.../usr/{aws_mqtt_user}/feedback` | `status_parser.parse_feedback_payload` |
+| Befehle (temp, mode, power, fanspeed, stop) | HTTP `POST /send/instruction` | `api.py`: `send_zone_command`, `send_installation_command` |
+| Anstoß einer Zustandsmeldung | HTTP `POST /send/instruction` (`command:status`) | `refresh_status_periodic` |
 
-**Inferido:** la topología (nombres de zona) se obtiene *solo una vez* al arranque (HTTP); los valores dinámicos llegan *solo* por MQTT. Si MQTT nunca conecta, las entidades permanecen con valores iniciales (`None` / `22.0` / `OFF`).
+**Abgeleitet:** Der Aufbau (Zonennamen) wird nur beim Start bzw. Neuladen per HTTP geholt; veränderliche Werte kommen nur per MQTT. Bis zum ersten Status sind die Entitäten „nicht verfügbar“ (`availability.py`).
 
 ---
 
-## 5. Diagrama de alto nivel
+## 5. Übersichtsdiagramm
 
 ```mermaid
 flowchart TB
     subgraph HA["Home Assistant"]
-        CF["config_flow.py<br/>(email/password)"]
+        CF["config_flow.py<br/>(E-Mail/Passwort)"]
         INIT["__init__.py<br/>async_setup_entry"]
-        API["api.py<br/>MySairAPI (requests, sync)"]
-        MQTT["mqtt_handler.py<br/>MySairMQTTClient (hilo)"]
-        BUS(["Event bus<br/>mysair_update"])
-        COORD["coordinator.py<br/>MySairCoordinator (C1)"]
+        API["api.py<br/>MySairAPI (requests, synchron)"]
+        MQTT["mqtt_handler.py<br/>MySairMQTTClient (Thread)"]
+        BUS(["Event-Bus<br/>mysair_update / mysair_feedback"])
+        COORD["coordinator.py<br/>MySairCoordinator"]
         CL["climate.py"]
         SE["sensor.py"]
         SW["switch.py"]
-        REF["refresh_status_periodic<br/>(cada 60s)"]
+        REF["refresh_status_periodic<br/>(alle 120 s)"]
     end
 
-    subgraph CLOUD["Nube MySair / AWS"]
-        HTTP["API HTTP<br/>api.mysair.es/v1"]
+    subgraph CLOUD["MySair-Cloud / AWS"]
+        HTTP["HTTP-API<br/>api.mysair.es/v1"]
         IOT["AWS IoT<br/>MQTT/WSS"]
-        DEV["Dispositivos<br/>zonificador"]
+        DEV["Geräte<br/>Zonenregler"]
     end
 
-    CF -->|login| API
+    CF -->|Anmeldung| API
     INIT --> API
     INIT --> MQTT
     API -->|"POST/GET/PUT"| HTTP
-    MQTT -->|"SUBSCRIBE pro/v1/get/ctl/#"| IOT
+    MQTT -->|"SUBSCRIBE pro/v1/get/ctl/#, usr/.../feedback"| IOT
     HTTP <--> DEV
     IOT <--> DEV
-    IOT -->|"PUBLISH .../status"| MQTT
-    MQTT -->|callback| BUS
+    IOT -->|"PUBLISH .../status, .../feedback"| MQTT
+    MQTT -->|Callback| BUS
     REF -->|"POST /send/instruction (status)"| HTTP
     BUS --> COORD
-    COORD -->|"dispatcher, señal por zona"| CL & SE & SW
+    COORD -->|"Dispatcher, Signal je Zone"| CL & SE & SW
+    BUS -->|mysair_feedback| CL & SW
     CL & SW -->|"send_zone_command → POST /send/instruction"| API
 ```
 
 ---
 
-## 6. Diagramas de secuencia
+## 6. Sequenzdiagramme
 
-### 6.1 Configuración inicial (config flow)
+### 6.1 Ersteinrichtung (Config Flow)
 
 ```mermaid
 sequenceDiagram
-    actor U as Usuario
+    actor U as Nutzer
     participant CF as config_flow.py
     participant API as MySairAPI
     participant H as api.mysair.es
-    U->>CF: introduce email + password
-    CF->>API: MySairAPI(email, password)
+    U->>CF: gibt E-Mail + Passwort ein
     CF->>API: async_add_executor_job(api.login)
     API->>H: POST /user/login
     H-->>API: entity{access_token, refresh_token}
-    alt sin token
-        API-->>CF: raise / result falso
-        CF-->>U: error invalid_auth
+    alt ungültige Zugangsdaten
+        API-->>CF: MySairAuthError
+        CF-->>U: Fehler invalid_auth
     else OK
-        CF->>CF: async_create_entry(data: email,password,tokens)
-        CF-->>U: entrada creada
+        CF->>CF: async_set_unique_id(email) + async_create_entry(email, refresh_token)
+        CF-->>U: Eintrag angelegt
     end
 ```
 
-> **Bug (Confirmado):** el config flow guarda `password` en claro y `access_token`/`refresh_token` que **nunca se reutilizan** (en el arranque se hace login nuevo). Ver `docs/security-and-privacy.md`.
+Das Passwort wird nur während des Dialogs im Speicher gehalten und nie in der Config Entry gespeichert. Siehe `docs/security-and-privacy.md`.
 
-### 6.2 Arranque de Home Assistant (setup entry)
+### 6.2 Start von Home Assistant (Setup Entry)
 
 ```mermaid
 sequenceDiagram
-    participant HA as HA core
+    participant HA as HA-Core
     participant I as async_setup_entry
     participant API as MySairAPI
     participant H as HTTP MySair
     participant M as MySairMQTTClient
     participant IOT as AWS IoT
     HA->>I: async_setup_entry(entry)
-    I->>API: login()
-    API->>H: POST /user/login
+    I->>API: refresh_tokens()
+    API->>H: PUT /user/refreshtokens
     I->>API: get_locations()
     API->>H: GET /locations
     I->>API: get_installations(location_id)
     API->>H: GET /installations
-    loop por instalación
+    loop je Installation
         I->>API: get_devices(ref)
         API->>H: GET /devices
     end
+    I->>I: _cleanup_stale_zone_devices()
     I->>I: hass.data[DOMAIN][entry_id] = {...}
-    I->>M: MySairMQTTClient(api, refs, callback)
-    I->>M: start()  (hilo daemon)
+    I->>M: start() (Daemon-Thread)
     M->>API: refresh_aws_credentials()
     API->>H: PUT /user/refreshawscredentials
-    M->>API: aws_sign_url(...)
-    M->>IOT: WSS connect + CONNECT + SUBSCRIBE
+    M->>IOT: WSS-Verbindung + CONNECT + SUBSCRIBE
+    I->>I: MySairCoordinator.start()
     I->>HA: async_forward_entry_setups(PLATFORMS)
-    I->>I: create_task(refresh_status_periodic)
+    I->>I: entry.async_create_background_task(refresh_status_periodic)
 ```
 
-### 6.3 Lectura de estado (refresco provocado)
+Fehlerfälle: Eine ungültige Sitzung führt zu `ConfigEntryAuthFailed` (HA bietet die erneute Anmeldung an), Netz- oder Backend-Fehler zu `ConfigEntryNotReady` (HA versucht es später erneut).
+
+### 6.3 Zustandsabfrage (angestoßen)
 
 ```mermaid
 sequenceDiagram
     participant R as refresh_status_periodic
     participant API as MySairAPI
     participant H as HTTP MySair
-    participant DEV as Dispositivo
+    participant DEV as Gerät
     participant IOT as AWS IoT
     participant M as MySairMQTTClient
-    loop cada 60s, por instalación
-        R->>API: send_instruction([{command:status, value:sync}])
-        API->>H: POST /send/instruction
-        H->>DEV: (backend) solicita estado
-        DEV->>IOT: publica estado
+    loop alle 120 s, je Installation
+        R->>API: send_installation_command(ref, "status")
+        API->>H: POST /send/instruction (command:status, value:sync)
+        H->>DEV: (Backend) fordert Zustand an
+        DEV->>IOT: veröffentlicht Zustand
         IOT->>M: PUBLISH .../status
     end
 ```
 
-### 6.4 Actualización recibida por MQTT
+### 6.4 Empfang einer MQTT-Aktualisierung
 
 ```mermaid
 sequenceDiagram
     participant IOT as AWS IoT
     participant M as MySairMQTTClient._on_message
     participant CB as mqtt_message_callback
-    participant BUS as event bus
+    participant BUS as Event-Bus
     participant CO as MySairCoordinator
-    participant E as Entidad (climate/sensor/switch)
-    IOT->>M: frame WSS binario (PUBLISH 0x30)
-    M->>M: extrae topic + JSON del payload
+    participant E as Entität (climate/sensor/switch)
+    IOT->>M: binärer WSS-Frame (PUBLISH 0x30)
+    M->>M: Puffer zusammensetzen, parse_mqtt_publish → Topic + JSON
     M->>CB: callback({topic, payload})
-    CB->>CB: limpia ';' final, json.loads, parsea t[]
-    CB->>BUS: call_soon_threadsafe(async_fire, mysair_update, {topic,data})
-    BUS->>CO: _handle_update(event) (único suscriptor, C1)
-    CO->>CO: filtra ctl en installation_refs, indexa por zona
+    CB->>CB: parse_status_payload (';' am Ende entfernen, t[] auswerten)
+    CB->>BUS: call_soon_threadsafe(async_fire, mysair_update, {topic, data})
+    BUS->>CO: _handle_update(event) (einziger Abonnent)
+    CO->>CO: ctl in installation_refs prüfen, nach Zone aufteilen
     CO->>E: async_dispatcher_send(signal_zone_update(ctl, zone_id), zone)
-    E->>E: _handle_zone_update(zone): actualiza estado + async_write_ha_state()
+    E->>E: _handle_zone_update(zone): Zustand setzen + async_write_ha_state()
 ```
 
-### 6.5 Envío de comando desde una entidad
+### 6.5 Befehl aus einer Entität
 
 ```mermaid
 sequenceDiagram
-    actor U as Usuario/HA
+    actor U as Nutzer/HA
     participant E as MySairThermostat
     participant API as MySairAPI
     participant H as HTTP MySair
+    participant IOT as AWS IoT
     U->>E: async_set_hvac_mode(HEAT)
-    E->>E: estado optimista local
+    E->>E: optimistischer lokaler Zustand
     E->>API: async_add_executor_job(send_zone_command, ctl, dev, "mode", "0", temp)
     API->>H: POST /send/instruction
-    alt 401 token expirado
+    alt 401 Token abgelaufen
         API->>H: PUT /user/refreshtokens
         API->>H: PUT /user/refreshawscredentials
-        API->>H: POST /send/instruction (reintento)
+        API->>H: POST /send/instruction (zweiter Versuch)
     end
-    H-->>API: 201 {msg:"Creado"}
-    E->>E: async_write_ha_state()
-    Note over E,IOT: El estado real se reconcilia<br/>después vía MQTT (6.4)
+    H-->>API: 201 {msg, error:[], entity.value[0].orderId}
+    E->>E: orderId merken, Zeitlimit 5 s starten
+    IOT-->>E: mysair_feedback mit gleicher orderId → bestätigt
+    Note over E: Ohne Bestätigung nach 5 s:<br/>optimistischen Zustand zurücksetzen
+    Note over E,IOT: Der echte Zustand kommt danach per MQTT (6.4)
 ```
 
-### 6.6 Recuperación tras desconexión MQTT
+Hinweis: `send_instruction` erwartet derzeit `msg == "Creado"`. Das Backend antwortet je nach Kontosprache auch mit `"Created"`; dieser Fall wird noch fälschlich als Ablehnung gewertet (siehe `docs/mysair-http-api.md` §3.1).
+
+### 6.6 Wiederverbindung nach MQTT-Abbruch
 
 ```mermaid
 sequenceDiagram
@@ -259,39 +270,41 @@ sequenceDiagram
     participant IOT as AWS IoT
     WS-->>M: on_close / on_error
     M->>M: connected=False
-    M->>M: sleep(10s)
-    loop mientras no stop_event
-        M->>API: refresh_aws_credentials() (si faltan)
-        M->>API: aws_sign_url(...)  (firma nueva, fecha nueva)
-        M->>IOT: WSS connect + CONNECT
+    alt geplante Wiederverbindung (Zugangsdaten laufen bald ab)
+        M->>M: sofort weiter
+    else unerwarteter Abbruch
+        M->>M: compute_backoff_delay (10 s … 120 s, ±20 % Jitter)
+    end
+    loop solange kein stop_event
+        M->>API: refresh_aws_credentials() (wenn fehlend oder bald abgelaufen)
+        M->>API: aws_sign_url(...) (neue Signatur)
+        M->>IOT: WSS-Verbindung + CONNECT (neue, eindeutige client_id)
         IOT-->>M: CONNACK (0x20)
-        M->>IOT: re-SUBSCRIBE a todos los topics
+        M->>IOT: alle Topics erneut abonnieren
+        M->>M: Timer für vorausschauende Erneuerung vor aws_expires_at
     end
 ```
 
-> **Nota (Confirmado):** en la reconexión, `_run` **no** vuelve a solicitar credenciales AWS salvo que `self.api.aws_credentials` sea falsy (`mqtt_handler.py:110`). Como una vez obtenidas ya no son `None`, se **reutiliza la firma con credenciales potencialmente caducadas** hasta que la firma falle. Ver `docs/quality` en `security-and-privacy.md` y hallazgos.
-
 ---
 
-## 7. Decisiones técnicas observadas
+## 7. Beobachtete technische Entscheidungen
 
-| Decisión | Evidencia | Comentario |
+| Entscheidung | Beleg | Kommentar |
 |---|---|---|
-| Cliente HTTP **síncrono** (`requests`) ejecutado en executor | `api.py:1`, `__init__.py:31` | Evita bloquear el loop, pero contradice `aiohttp` del manifest (no se usa). |
-| MQTT **artesanal** sobre WebSocket en vez de `paho`/`amqtt` | `mqtt_handler.py:37-63` | Construye paquetes MQTT a mano; `paho-mqtt` del manifest no se usa. |
-| Comunicación entidad↔datos vía **event bus** | `climate.py:71`, `__init__.py:116` | Desacopla, pero es fan-out O(nº entidades) por mensaje. |
-| Estado **optimista** en comandos | `climate.py:101`, `switch.py:67` | Se reconcilia luego por MQTT; sin rollback si el comando falla. |
-| Sin `DataUpdateCoordinator` | — | Patrón push manual; ver `docs/home-assistant-integration.md`. |
-| Firma AWS SigV4 propia | `api.py:288-329` | `boto3` del manifest no se usa. |
+| **Synchroner** HTTP-Client (`requests`) im Executor | `api.py`, Aufrufe über `async_add_executor_job` | Blockiert den Loop nicht; erlaubt eine injizierbare `session` für Tests. |
+| MQTT **von Hand** über WebSocket statt `paho-mqtt` | `mqtt_handler.py` | Bewusst beibehalten: `paho-mqtt` unterstützt keine SigV4-signierte WSS-URL, die vor jeder Wiederverbindung neu signiert werden muss (siehe `docs/development-roadmap.md`, E6). |
+| Event-Bus + zentraler Koordinator + Dispatcher | `coordinator.py` | Ein Abonnent je Config Entry statt einer Filterung in jeder Entität. |
+| **Optimistischer** Zustand mit Rücksetzung | `command_feedback.py` | Wird zurückgesetzt, wenn nach 5 s keine Bestätigung kommt; ein echter Status hat Vorrang. |
+| Kein `DataUpdateCoordinator` | – | Reines Push-Muster; `DataUpdateCoordinator` ist für Abfragen gedacht. |
+| Eigene AWS-SigV4-Signatur | `api.py`: `aws_sign_url` | Vermeidet `boto3` als schwere Abhängigkeit. |
 
 ---
 
-## 8. Puntos pendientes de confirmar (resumen)
+## 8. Offene Punkte (Kurzfassung)
 
-- Estructura exacta de las respuestas HTTP (campos de `location`, `installation`, `device`). **Desconocido** — solo se consumen `id`, `reference`, `name`. Ver `docs/mysair-http-api.md`.
-- Semántica completa del payload MQTT `status` (campos `t[]`: `rf,n,tr,tc,tmm,tmx,e`, y otros no leídos). **Inferido parcialmente**. Ver `docs/mysair-mqtt-protocol.md`.
-- Codificación de modo **inconsistente** entre comando (`0=calor,1=frío`) y estado (`e: 1=heat,2=cool`). **Confirmado como inconsistencia**, semántica real **Desconocida**. Ver `docs/known-unknowns.md`.
-- Si el backend admite realmente `command:"temp"` con `value` string, o requiere el dict como en `mode`. **Hipótesis**.
-- Formato de topics de publicación de estado más allá de `.../status`. **Desconocido**.
+- Vollständige Struktur der HTTP-Antworten (Felder von `location`, `installation`, `device`). **Unbekannt** – genutzt werden nur `id`, `reference`, `name`. Siehe `docs/mysair-http-api.md`.
+- Bedeutung der Zonenfelder `vf`, `hmh`, `mh`, `p`, `ps`. **Unbekannt**. Siehe `docs/known-unknowns.md`.
+- Ratenbegrenzung von `/send/instruction`. **Unbekannt**.
+- Weitere Topics außer `.../status` und `.../feedback`. Bisher keine beobachtet.
 
-Referencias cruzadas: `docs/mysair-http-api.md`, `docs/mysair-mqtt-protocol.md`, `docs/domain-model.md`, `docs/home-assistant-integration.md`, `docs/testing-strategy.md`, `docs/security-and-privacy.md`, `docs/known-unknowns.md`, `docs/development-roadmap.md`.
+Querverweise: `docs/mysair-http-api.md`, `docs/mysair-mqtt-protocol.md`, `docs/domain-model.md`, `docs/home-assistant-integration.md`, `docs/testing-strategy.md`, `docs/security-and-privacy.md`, `docs/known-unknowns.md`, `docs/development-roadmap.md`.

@@ -1,36 +1,35 @@
-# Modelo de dominio de MySair
+# Domänenmodell von MySair
 
-> Reconstrucción conceptual a partir del código. Certeza marcada por elemento.
-
----
-
-## 1. Jerarquía de conceptos (Confirmado por el flujo de descubrimiento)
-
-```
-Cuenta (email/password)
-  └── Location (ubicación)            GET /locations            → id
-        └── Installation (sistema)   GET /installations        → reference  (== ctl == controlador)
-              └── Device (zona/termostato)  GET /devices        → reference, name
-                    └── Estado (por MQTT)   .../status → t[]    → tr,tc,tmm,tmx,e
-```
-
-**Observaciones (Confirmado):**
-- La integración usa **solo la primera `Location`** (`__init__.py:39`).
-- **Todas** las instalaciones de esa ubicación se cargan (`__init__.py:50-55`).
-- El `Installation.reference` cumple triple rol: `ctl` en comandos, prefijo de topic MQTT, e identificador de "instalación".
-- Un `Device` = una **zona** = un **termostato** en la terminología del código (se usan indistintamente).
+> Begriffliche Rekonstruktion aus dem Code und der offiziellen App. Gewissheit je Element angegeben.
 
 ---
 
-## 2. Diagrama de clases (conceptual + implementación)
+## 1. Begriffshierarchie (Bestätigt durch den Erkennungsablauf)
+
+```
+Konto (E-Mail, refresh_token)
+  └── Location (Standort)              GET /locations            → id
+        └── Installation (Anlage)      GET /installations        → reference  (== ctl == Controller)
+              └── Device (Zone/Thermostat)  GET /devices         → reference, name
+                    └── Zustand (per MQTT)  .../status → t[]      → e, m, tr, tc, tmm, tmx, hm, vv, sv, Fähigkeiten
+```
+
+**Beobachtungen (Bestätigt):**
+- Die Integration nutzt **nur die erste `Location`** (`async_setup_entry`, bewusste Abgrenzung).
+- **Alle** Installationen dieses Standorts werden geladen.
+- `Installation.reference` hat drei Rollen: `ctl` in Befehlen, Teil des MQTT-Topics und Kennung der Installation (auch für den Dienst `mysair.stop_installation`).
+- Ein `Device` = eine **Zone** = ein **Thermostat**; die Begriffe werden im Code gleichbedeutend verwendet.
+
+---
+
+## 2. Klassendiagramm (begrifflich + Umsetzung)
 
 ```mermaid
 classDiagram
     class Account {
       +email
-      +password
-      +access_token
       +refresh_token
+      +access_token
       +aws_credentials
     }
     class Location {
@@ -44,115 +43,130 @@ classDiagram
       +name
     }
     class ZoneState {
+      +power        «e: 0/1/2»
+      +mode         «m: 0..5»
       +temp_actual  «tr»
       +temp_target  «tc»
       +temp_min     «tmm»
       +temp_max     «tmx»
-      +mode         «e: 0/1/2»
+      +humidity     «hm»
+      +fan_mode     «vv»
+      +capabilities «c/f/v/s»
     }
     Account "1" --> "1..*" Location
     Location "1" --> "1..*" Installation
     Installation "1" --> "1..*" Device
-    Device "1" --> "1" ZoneState : vía MQTT status
+    Device "1" --> "1" ZoneState : per MQTT status
 
     class MySairAPI
     class MySairMQTTClient
+    class MySairCoordinator
     class MySairThermostat
     class MySairSwitch
+    class MySairFloorSwitch
     class MySairTempSensor
     class MySairSetpointSensor
     class MySairModeSensor
+    class MySairHumiditySensor
     Account ..> MySairAPI
-    Installation ..> MySairMQTTClient : subscribe topic
+    Installation ..> MySairMQTTClient : abonniert Topic
+    Installation ..> MySairCoordinator : filtert ctl
     Device ..> MySairThermostat
     Device ..> MySairSwitch
+    Device ..> MySairFloorSwitch
     Device ..> MySairTempSensor
     Device ..> MySairSetpointSensor
     Device ..> MySairModeSensor
+    Device ..> MySairHumiditySensor
 ```
 
 ---
 
-## 3. Modelos internos
+## 3. Interne Modelle
 
-| Modelo | ¿Clase formal? | Representación real | Origen |
+| Modell | Eigene Klasse? | Tatsächliche Darstellung | Ort |
 |---|---|---|---|
-| Account | No | atributos de `MySairAPI` (`email`, `password`, `access_token`, `refresh_token_value`, `aws_credentials`, `entity`) | `api.py:15-23` |
-| Location | No | `dict` con `id`, guardado transitoriamente | `__init__.py:39` |
-| Installation | No | `str` (`reference`) en lista `installation_refs` | `__init__.py:49-52` |
-| Device | No | `dict` en `all_devices[ref]`, se lee `reference`/`name` | `__init__.py:53-54` |
-| ZoneState | No | `dict` normalizado emitido en el evento `mysair_update` | `__init__.py:99-108` |
+| Account | Nein | Attribute von `MySairAPI` (`email`, `access_token`, `refresh_token_value`, `aws_credentials`, `entity`); in der Config Entry nur `email` + `refresh_token` | `api.py`, `config_flow.py` |
+| Location | Nein | `dict` mit `id`, nur während des Setups | `async_setup_entry` |
+| Installation | Nein | `str` (`reference`) in der Liste `installation_refs` | `async_setup_entry` |
+| Device | Nein | `dict` in `all_devices[ref]`, gelesen werden `reference`/`name` | `async_setup_entry` |
+| ZoneState | Nein | normalisiertes `dict` aus `parse_status_payload`, über den Koordinator je Zone verteilt | `status_parser.py`, `coordinator.py` |
 
-> **No existen dataclasses ni modelos tipados.** Todo son `dict`/`str`/`list`. **Confirmado.** Esto es deuda técnica (ver `docs/testing-strategy.md` y roadmap).
+> Es gibt **keine Dataclasses oder typisierten Modelle**; alles sind `dict`/`str`/`list`. **Bestätigt.** Das ist technische Schuld, aber derzeit ohne praktische Folgen.
 
 ---
 
-## 4. Mapeo MySair → entidades Home Assistant
+## 4. Abbildung MySair → Home-Assistant-Entitäten
 
-| Concepto MySair | Entidad HA | unique_id | Plataforma | Certeza |
+| MySair-Begriff | HA-Entität (Klasse) | unique_id | Plattform | Gewissheit |
 |---|---|---|---|---|
-| Device (zona) | `climate.MySairThermostat` | `mysair_{ctl}_{dev}` | climate | Confirmado |
-| Device — temp actual | `sensor.MySairTempSensor` | `mysair_temp_{ctl}_{dev}` | sensor | Confirmado |
-| Device — consigna | `sensor.MySairSetpointSensor` | `mysair_setpoint_{ctl}_{dev}` | sensor | Confirmado |
-| Device — modo | `sensor.MySairModeSensor` | `mysair_mode_{ctl}_{dev}` | sensor | Confirmado |
-| Device — power | `switch.MySairSwitch` | `mysair_switch_{ctl}_{dev}` | switch | Confirmado |
-| Device — modo frío/calor | ~~`select.MySairModeSelect`~~ | — | **eliminada** en estabilización (era código muerto/roto) | — |
+| Device (Zone) | `MySairThermostat` | `mysair_{ctl}_{dev}` | climate | Bestätigt |
+| Zone – Ein/Aus | `MySairSwitch` | `mysair_switch_{ctl}_{dev}` | switch | Bestätigt |
+| Zone – Fußbodenheizung | `MySairFloorSwitch` | `mysair_floor_{ctl}_{dev}` | switch | Bestätigt |
+| Zone – aktuelle Temperatur | `MySairTempSensor` | `mysair_temp_{ctl}_{dev}` | sensor | Bestätigt |
+| Zone – Soll-Temperatur | `MySairSetpointSensor` | `mysair_setpoint_{ctl}_{dev}` | sensor | Bestätigt |
+| Zone – Modus | `MySairModeSensor` | `mysair_mode_{ctl}_{dev}` | sensor | Bestätigt |
+| Zone – Luftfeuchte | `MySairHumiditySensor` | `mysair_humidity_{ctl}_{dev}` | sensor | Bestätigt |
+| Konto – Cloud-Verbindung | `MySairMqttStatusSensor` | `mysair_mqtt_status_{entry_id}` | sensor | Bestätigt |
 
-**Device registry:** todas las entidades comparten `identifiers = {(DOMAIN, f"{ctl}_{dev}")}` → una zona = **un device HA** con climate+switch+3 sensores. **Confirmado** (`climate.py:62`, etc.). `select.py` añade además `via_device=(DOMAIN, ctl)` a un device que **nunca se crea** → referencia colgante. **Confirmado**.
+**Geräteregister:** Alle Entitäten einer Zone teilen `identifiers = {(DOMAIN, f"{ctl}_{dev}")}` (`device.zone_device_info`) → eine Zone = **ein HA-Gerät** mit Thermostat, zwei Schaltern und vier Sensoren. Der Gerätename ist der Zonenname, weil Home Assistant ihn den Entitätsnamen voranstellt (`has_entity_name`). Der Cloud-Verbindungssensor hängt an einem Kontogerät mit `identifiers = {(DOMAIN, entry_id)}` (`device.account_device_info`). Zonen, die aus dem Konto verschwinden, werden beim nächsten Start oder Neuladen samt Entitäten aus dem Register entfernt (`_cleanup_stale_zone_devices`). **Bestätigt.**
 
 ---
 
-## 5. Representación de atributos dinámicos
+## 5. Darstellung der veränderlichen Attribute
 
-| Atributo dominio | Campo MQTT | Entidad/propiedad HA | Mapeo |
+| Domänenattribut | MQTT-Feld | HA-Entität/Eigenschaft | Abbildung |
 |---|---|---|---|
-| Temperatura actual | `tr` | `climate.current_temperature`, `MySairTempSensor` | — |
-| Consigna | `tc` | `climate.target_temperature`, `MySairSetpointSensor` | — |
-| Rango temp | `tmm`/`tmx` | (parseados pero **no** aplicados; climate usa 10–30 fijos) | — |
-| Encendido | `e` | `climate.hvac_mode==OFF`, `switch.is_on`, `MySairModeSensor` | `"0"→off`, `"1"→on`, `"2"→standby (IDLE)` |
-| Calor/frío | `m` (paridad) | `climate.hvac_mode/action`, `MySairModeSensor` | par→HEAT/HEATING, impar→COOL/COOLING |
-| Humedad | `hm` | (parseada, aún sin entidad) | — |
-| Capacidades | `c`/`f`/`v`/`s` | (parseadas, aún sin uso) | permite calor/frío/fan/suelo |
+| Aktuelle Temperatur | `tr` | `climate.current_temperature`, `MySairTempSensor` | – |
+| Soll-Temperatur | `tc` | `climate.target_temperature`, `MySairSetpointSensor` | – |
+| Temperaturbereich | `tmm`/`tmx` | `climate.min_temp`/`max_temp` | – |
+| Ein/Aus | `e` | `climate.hvac_mode==OFF`, `switch.is_on`, `MySairModeSensor` | `"0"`→aus, `"1"`→ein, `"2"`→Standby (`HVACAction.IDLE`) |
+| Heizen/Kühlen | `m` (Parität) | `climate.hvac_mode/hvac_action`, `MySairModeSensor` | gerade→HEAT/HEATING, ungerade→COOL/COOLING |
+| Medium | `m` (Mengen) | `MySairFloorSwitch.is_on`, Attribut `medium` von `MySairModeSensor` | `air`/`floor`/`air_and_floor`; bleibt bei ausgeschalteter Zone erhalten |
+| Luftfeuchte | `hm` (Ersatz `hum`, 0 = unbekannt) | `MySairHumiditySensor` | – |
+| Lüfter | `vv` | `climate.fan_mode` | `"1"`–`"3"` unverändert, `"4"`↔`"auto"`, `"0"`→keiner |
+| Fähigkeiten | `c`/`f`/`v`/`s` | `climate.hvac_modes`, `climate.fan_modes`, Verfügbarkeit von `MySairFloorSwitch` | Heizen/Kühlen/Lüfter/Fußboden möglich |
 
-> ✅ **Corregido (A5):** `e` es el **encendido** (no el modo) y el modo real es `m`. `status_parser.parse_status_payload` deriva `is_on`/`is_standby` de `e` y `is_heat`/`is_cool`/`is_ac`/`is_floor` de `m`. Ver `docs/protocol-findings.md`.
-> **Pendiente:** `tmm`/`tmx` se parsean pero **no** fijan `min_temp`/`max_temp` de climate (fijos 10/30 en `climate.py`). `hm` y capacidades se parsean pero aún no tienen entidad (oportunidad).
-
----
-
-## 6. Conceptos ahora modelables (confirmados en el protocolo, aún sin entidad)
-
-| Concepto | Campo | Estado en la integración |
-|---|---|---|
-| Suelo radiante vs AC | `m` ({2,3,4,5}=suelo) + capacidad `s` + `sv` (encendido/apagado) | ✅ **Implementado (F4, 2026-07-21):** `switch.py` → `MySairFloorSwitch`, reutiliza el comando `mode` recalculando `m` (`compute_mode_value`). Resumen de qué medio está activo (`ac`/`suelo`/`mixto`, se conserva apagado) expuesto como atributo `medio` de `sensor.<zona>_modo` (2026-07-21). |
-| Velocidad del ventilador | `vv` + capacidad `v` + comando `fanspeed` | ✅ Implementado (F2) |
-| Humedad | `hm` (Ersatz `hum`; 0 = unbekannt), siehe `known-unknowns.md` #25 | ✅ Implementado (F1) |
-| Standby | `e=="2"` | ✅ Mapeado a `HVACAction.IDLE` |
-
-## 6b. Conceptos aún ausentes o no confirmados
-
-| Concepto | Estado | Nota |
-|---|---|---|
-| Modo `auto` | 🟢 **Evaluado (F3, 2026-07-21) — sin soporte de protocolo:** `m` (0-5) cubre exactamente las 6 combinaciones AC/suelo × calor/frío, sin hueco para un modo de cambio automático. `const.HVAC_MODES` (con `"auto"`) era código muerto sin ningún consumidor; eliminado. El único "auto" real del protocolo es la velocidad de ventilador (`vv="4"`, ya implementado en F2). |
-| Temporizador / Programas | 🟢 **Descartado por decisión de alcance (F6, 2026-07-21):** solo el nombre de los comandos (`temporizer`, `programs`) está confirmado en el bundle; la forma del payload para *fijar* un temporizador o programa nunca se decodificó, y no existe ni un `setPrograms` de escritura. Implementarlo exigiría inventar campos. Ver `known-unknowns.md` #27. |
-| Online/offline por zona | **Desconocido** | Sin `available`; existe `isOutService` en la app (sin confirmar campo). |
-| Errores del dispositivo | **Desconocido** | No modelados. |
-| Controlador como device | No modelado | `via_device` apuntaba a un device inexistente (select.py eliminado). |
+Werte und Ableitungen sind in `status_parser.parse_status_payload` zusammengefasst (`is_on`/`is_standby` aus `e`; `is_heat`/`is_cool`/`is_ac`/`is_floor` aus `m`). Siehe `docs/protocol-findings.md`.
 
 ---
 
-## 7. Campos: estado de confirmación
+## 6. Abgebildete Begriffe
 
-| Campo | Significado | Certeza |
+| Begriff | Feld | Stand in der Integration |
 |---|---|---|
-| `e` (status) | encendido: 0=off, 1=on, 2=standby | ✅ Confirmado (app oficial) |
-| `m` (status) | modo 0-5: par=calor, impar=frío; {0,1,4,5}=AC, {2,3,4,5}=suelo | ✅ Confirmado |
-| `tr`/`tc`/`tmm`/`tmx`/`hm` | temp actual/consigna/min/max/humedad | ✅ Confirmado |
-| `vv`/`tzv` | fan / temporizador (valores actuales) | ✅ Confirmado |
-| `sv` | suelo radiante encendido/apagado ("0"/"1") | ✅ Confirmado (re-verificado 2026-07-21, ver `known-unknowns.md` #26) |
-| `c`/`f`/`v`/`s`/`tz`/`hp`/`pl` | capacidades (calor/frío/fan/suelo/timer/programas/principal) | ✅ Confirmado |
-| `value` string con `;` final | JSON serializado con terminador (`slice(0,-1)` en la app) | ✅ Confirmado |
-| `app` (`web0077`/`aws_mqtt_user`) | `session.getClientId()` del emisor | ✅ Confirmado |
-| `validated=1` | filtro de instalaciones validadas | Inferido |
-| Campos de `location`/`installation` distintos de los leídos | — | Desconocido |
+| Fußbodenheizung vs. Luft | `m` ({2,3,4,5}=Fußboden) + Fähigkeit `s` + `sv` (ein/aus) | ✅ Schalter „Fußbodenheizung“ (`MySairFloorSwitch`); nutzt den Befehl `mode` und berechnet `m` neu (`compute_mode_value`). Zusammenfassung des aktiven Mediums im Attribut `medium` des Modus-Sensors. |
+| Lüfterstufe | `vv` + Fähigkeit `v` + Befehl `fanspeed` | ✅ `climate.fan_mode` |
+| Luftfeuchte | `hm` (Ersatz `hum`; 0 = unbekannt), siehe `known-unknowns.md` #25 | ✅ Feuchtesensor je Zone |
+| Standby | `e=="2"` | ✅ als `HVACAction.IDLE` |
+| Verfügbarkeit | Aktualität des letzten Status | ✅ „nicht verfügbar“ bis zum ersten Status und nach 360 s ohne Status (`availability.py`) |
 
-Ver `docs/protocol-findings.md` (fuente) y `docs/known-unknowns.md` (incógnitas restantes).
+## 6b. Fehlende oder unbestätigte Begriffe
+
+| Begriff | Stand | Hinweis |
+|---|---|---|
+| Modus `auto` | 🟢 Vom Protokoll nicht unterstützt | `m` (0–5) deckt genau die sechs Kombinationen Luft/Fußboden × Heizen/Kühlen ab. Die einzige echte Automatik ist die Lüfterstufe (`vv="4"`). |
+| Timer / Programme | 🟢 Bewusst nicht umgesetzt | Nur die Befehlsnamen (`temporizer`, `programs`) sind bestätigt; das Format zum *Setzen* ist nicht entschlüsselt. Siehe `known-unknowns.md` #27. |
+| Online/offline je Zone | **Unbekannt** | In der App gibt es `isOutService` (Feld nicht bestätigt). |
+| Gerätefehler | **Unbekannt** | Nicht abgebildet. |
+| Controller als eigenes Gerät | Nicht abgebildet | Jede Zone ist ein eigenständiges Gerät ohne `via_device`. |
+
+---
+
+## 7. Felder: Stand der Bestätigung
+
+| Feld | Bedeutung | Gewissheit |
+|---|---|---|
+| `e` (Status) | Ein/Aus: 0=aus, 1=ein, 2=Standby | ✅ Bestätigt (offizielle App) |
+| `m` (Status) | Modus 0–5: gerade=Heizen, ungerade=Kühlen; {0,1,4,5}=Luft, {2,3,4,5}=Fußboden | ✅ Bestätigt |
+| `tr`/`tc`/`tmm`/`tmx`/`hm` | aktuelle/Soll-/minimale/maximale Temperatur, Luftfeuchte | ✅ Bestätigt |
+| `vv`/`tzv` | Lüfter / Timer (aktuelle Werte) | ✅ Bestätigt |
+| `sv` | Fußbodenheizung ein/aus ("0"/"1") | ✅ Bestätigt (`known-unknowns.md` #26) |
+| `c`/`f`/`v`/`s`/`tz`/`hp`/`pl` | Fähigkeiten (Heizen/Kühlen/Lüfter/Fußboden/Timer/Programme/Hauptzone) | ✅ Bestätigt |
+| `value`-String mit `;` am Ende | serialisiertes JSON mit Abschlusszeichen (`slice(0,-1)` in der App) | ✅ Bestätigt |
+| `app` (`aws_mqtt_user`) | `session.getClientId()` des Absenders | ✅ Bestätigt |
+| `validated=1` | Filter für Installationen, die schon einmal verbunden waren | ✅ Bestätigt (`known-unknowns.md` #14) |
+| `vf`/`hmh`/`mh`/`p`/`ps` | – | Unbekannt |
+| Felder von `location`/`installation` außer den gelesenen | – | Unbekannt |
+
+Siehe `docs/protocol-findings.md` (Quelle) und `docs/known-unknowns.md` (verbleibende Fragen).

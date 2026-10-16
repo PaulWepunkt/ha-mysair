@@ -1,28 +1,28 @@
-# Hallazgos del protocolo desde la app oficial
+# Protokollerkenntnisse aus der offiziellen App
 
-> Fuente: bundle JavaScript de la app web MySair `https://app.mysair.es/js/app.09acea34.js`
-> (asset estático público; no se interactúa con API de comandos, MQTT ni dispositivos).
-> Nivel de certeza: **Confirmado** — extraído directamente de la lógica de la app.
-> Los fragmentos son código de la app (minificado, sin secretos). Fecha de análisis: 2026-07-19.
+> Quelle: JavaScript-Bundle der MySair-Web-App `https://app.mysair.es/js/app.09acea34.js`
+> (öffentliche statische Datei; es wurde weder mit der Befehls-API noch mit MQTT oder Geräten interagiert).
+> Gewissheit: **Bestätigt** – direkt aus der Logik der App entnommen, sofern nicht anders vermerkt.
+> Die Ausschnitte sind Code der App (minifiziert, ohne Geheimnisse). Der Dateiname enthält einen Build-Hash; eine neuere App-Version kann anders heißen und abweichen.
 
 ---
 
-## 1. Sobre / envoltorio de la instrucción
+## 1. Umschlag einer Anweisung
 
 ```js
 _generateInstruction(e,t,i,a){
   return { sender:"WEB", ctl:e, app:this.$session.getClientId(), device:t, command:i, value:a }
 }
 ```
-- `app` = `session.getClientId()` (equivalente al `aws_mqtt_user`).
-- Idéntico a lo que envía la integración.
+- `app` = `session.getClientId()` (entspricht `aws_mqtt_user`).
+- Identisch mit dem, was die Integration sendet.
 
-## 2. Catálogo de comandos (mixin de instrucciones)
+## 2. Befehlskatalog (Mixin für Anweisungen)
 
 ```js
-setPower(e,t,i,...){ _sendInstruction(e,t,"power",i,...) }        // apagar: value "0"
-setMode(e,t,i,...){ _sendInstruction(e,t,"mode",i,...) }          // encender / fijar modo
-setTemp(e,t,i,...){ _sendInstruction(e,t,"temp",""+i,...) }        // consigna (string)
+setPower(e,t,i,...){ _sendInstruction(e,t,"power",i,...) }        // ausschalten: value "0"
+setMode(e,t,i,...){ _sendInstruction(e,t,"mode",i,...) }          // einschalten / Modus setzen
+setTemp(e,t,i,...){ _sendInstruction(e,t,"temp",""+i,...) }        // Soll-Temperatur (String)
 setFanspeed(e,t,i,...){ _sendInstruction(e,t,"fanspeed",""+i,...) }
 setTemporizer(e,t,i,...){ _sendInstruction(e,t,"temporizer",i,...) }
 stopInstallation(e,t,...){ _sendInstruction(e,t,"stop","1",...) }
@@ -30,34 +30,34 @@ getPrograms(e,t,...){ _sendInstruction(e,t,"programs","",...) }
 getStatus(e,...){ $api.instruction(_generateInstruction(e,"","status","sync")) }
 ```
 
-| `command` | `value` | Finalidad |
+| `command` | `value` | Zweck |
 |---|---|---|
-| `power` | `"0"` | Apagar (único uso observado del comando power) |
-| `mode` | `{mode:"0".."5", temperature:"<tc>"}` | Encender / fijar modo |
-| `temp` | `"<temp>"` | Consigna |
-| `fanspeed` | `"<n>"` | Velocidad de ventilador |
-| `temporizer` | `<timer>` | Temporizador |
-| `stop` | `"1"` | Parar instalación |
-| `status` | `"sync"` | Solicitar estado |
-| `programs` | `""` | Leer programas |
+| `power` | `"0"` | Ausschalten (einzige beobachtete Verwendung von `power`) |
+| `mode` | `{mode:"0".."5", temperature:"<tc>"}` | Einschalten / Modus setzen |
+| `temp` | `"<temp>"` | Soll-Temperatur |
+| `fanspeed` | `"<n>"` | Lüfterstufe |
+| `temporizer` | `<timer>` | Timer |
+| `stop` | `"1"` | Installation stoppen |
+| `status` | `"sync"` | Zustand anfordern |
+| `programs` | `""` | Programme lesen |
 
-## 3. Encendido / apagado
+## 3. Ein- und Ausschalten
 
 ```js
-setModeHeat:function(e,t){                       // e = AC on/off, t = Suelo on/off
-  if(!e&&!t) return this.setPower(installation_ref, reference, "0", ...);  // ambos off -> power "0"
+setModeHeat:function(e,t){                       // e = Luft an/aus, t = Fußboden an/aus
+  if(!e&&!t) return this.setPower(installation_ref, reference, "0", ...);  // beides aus -> power "0"
   this.status.setMode(this.status.isModeHeat(), e, t);
   this.status.setPower(!0);
   this.setMode(installation_ref, reference, {mode:this.status.getMode(), temperature:this.status.getOrder()}, ...)
 }
 ```
-- **Apagar** = `command:"power", value:"0"`.
-- **Encender** = `command:"mode"` con el `m` deseado. **No existe `power:"1"`**.
+- **Ausschalten** = `command:"power", value:"0"`.
+- **Einschalten** = `command:"mode"` mit dem gewünschten `m`. **Es gibt kein `power:"1"`.**
 
-## 4. Modelo de estado por zona (clase `te`)
+## 4. Zustandsmodell je Zone (Klasse `te`)
 
 ```js
-isOn()      { return "0" != this.e }              // e: "0"=off, "1"=on, "2"=standby
+isOn()      { return "0" != this.e }              // e: "0"=aus, "1"=ein, "2"=Standby
 isStanby()  { return "2" == this.e }
 isModeAC()  { return this.isOn() && ["0","1","4","5"].includes(this.m) }
 isModeFloor(){ return this.isOn() && ["2","3","4","5"].includes(this.m) }
@@ -68,32 +68,32 @@ allowHeat(){return "1"==this.c}  allowCool(){return "1"==this.f}
 allowFan(){return "1"==this.v}   allowFloor(){return "1"==this.s}
 allowTimer(){return "1"==this.tz}  allowPrograms(){return "1"==this.hp}
 
-setMode(e,t,i){ let a=null;                        // e=esCalor, t=AC, i=Suelo
-  t&&!i&&(a=0); !t&&i&&(a=2); t&&i&&(a=4);         // AC=0, Suelo=2, AC+Suelo=4
-  e||(a+=1);                                       // +1 si NO es calor (=frío)
+setMode(e,t,i){ let a=null;                        // e=Heizen, t=Luft, i=Fußboden
+  t&&!i&&(a=0); !t&&i&&(a=2); t&&i&&(a=4);         // Luft=0, Fußboden=2, Luft+Fußboden=4
+  e||(a+=1);                                       // +1, wenn NICHT Heizen (=Kühlen)
   this.m=""+a }
 setPower(e){ this.e = e?"1":"0" }
 ```
 
-Nivel de instalación (`ae`): `this.heat = ["0","2","4"].includes(t.m)` → confirma **par=calor**.
+Auf Installationsebene (`ae`): `this.heat = ["0","2","4"].includes(t.m)` → bestätigt **gerade = Heizen**.
 
-### Tabla del campo `m` (modo)
+### Tabelle des Felds `m` (Modus)
 
-| `m` | AC | Suelo | Temp |
+| `m` | Luft | Fußboden | Richtung |
 |---|:--:|:--:|---|
-| `0` | ✓ | | Calor |
-| `1` | ✓ | | Frío |
-| `2` | | ✓ | Calor |
-| `3` | | ✓ | Frío |
-| `4` | ✓ | ✓ | Calor |
-| `5` | ✓ | ✓ | Frío |
+| `0` | ✓ | | Heizen |
+| `1` | ✓ | | Kühlen |
+| `2` | | ✓ | Heizen |
+| `3` | | ✓ | Kühlen |
+| `4` | ✓ | ✓ | Heizen |
+| `5` | ✓ | ✓ | Kühlen |
 
-**Par = calor, impar = frío.**
+**Gerade = Heizen, ungerade = Kühlen.** Einen automatischen Wechsel zwischen Heizen und Kühlen gibt es nicht: Die sechs Werte decken genau die Kombinationen Luft/Fußboden × Heizen/Kühlen ab.
 
-## 5. Campos del payload de zona (mapeo `_validateInstallation`)
+## 5. Felder der Zonen-Nutzdaten (Abbildung in `_validateInstallation`)
 
 ```js
-t = JSON.parse(t.value.slice(0,-1))               // confirma el ';' final que se recorta
+t = JSON.parse(t.value.slice(0,-1))               // bestätigt das abgeschnittene ';' am Ende
 devices: t.t.map(e=>({
   reference:e.rf, name:e.n, principal:e.pl, floor:e.s,
   cold:e.f, hot:e.c, fan:e.v, timer:e.tz, programming:e.hp,
@@ -101,126 +101,126 @@ devices: t.t.map(e=>({
 }))
 ```
 
-| Campo | Significado | Tipo |
+| Feld | Bedeutung | Typ |
 |---|---|---|
-| `rf` | referencia de zona | str |
-| `n` | nombre | str |
-| `e` | **encendido**: 0=off, 1=on, 2=standby | str |
-| `m` | **modo** 0-5 (ver §4) | str |
-| `tr` | temperatura actual | num |
-| `tc` | consigna (order) | num |
-| `tmm` / `tmx` | temp mín / máx | num |
-| `hm` | humedad | num |
-| `vv` | modo/velocidad de ventilador actual | str |
-| `tzv` | valor de temporizador actual | str |
-| `sv` | **suelo radiante encendido/apagado**: "0"/"1" (distinto de la capacidad `s`) | str |
-| `pl` | principal | flag |
-| Capacidades | `c`=permite calor, `f`=permite frío, `v`=fan, `s`=suelo, `tz`=timer, `hp`=programas | "1"/"0" |
-| `v` (instalación) | versión | — |
+| `rf` | Zonenreferenz | str |
+| `n` | Name | str |
+| `e` | **Ein/Aus**: 0=aus, 1=ein, 2=Standby | str |
+| `m` | **Modus** 0–5 (siehe §4) | str |
+| `tr` | aktuelle Temperatur | num |
+| `tc` | Soll-Temperatur (order) | num |
+| `tmm` / `tmx` | minimale / maximale Temperatur | num |
+| `hm` | Luftfeuchte (siehe Hinweis unten) | num |
+| `vv` | aktueller Lüftermodus / aktuelle Lüfterstufe | str |
+| `tzv` | aktueller Timerwert | str |
+| `sv` | **Fußbodenheizung ein/aus**: "0"/"1" (zu unterscheiden von der Fähigkeit `s`) | str |
+| `pl` | Hauptzone | Flag |
+| Fähigkeiten | `c`=Heizen möglich, `f`=Kühlen möglich, `v`=Lüfter, `s`=Fußboden, `tz`=Timer, `hp`=Programme | "1"/"0" |
+| `v` (Installation) | Version | – |
 
-**Confirmación de `sv`** (2026-07-21, re-fetch de `app.09acea34.js`, mismo hash que el análisis original): la fila
-original de esta tabla no citaba un getter concreto, y una revisión posterior (Tarea 22) no lo encontró y lo dejó
-como incógnita. Al repetir la búsqueda se localizó:
+**Hinweis zur Luftfeuchte:** Echte Zonendaten können neben `hm` auch ein Feld `hum` enthalten. `hum` meldet dabei `"0"`, `hm` trägt den Messwert. Die Integration liest deshalb `hm` zuerst und `hum` nur als Ersatz; ein Wert von 0 gilt als unbekannt. Siehe `docs/known-unknowns.md` #25.
+
+**Beleg für `sv`:** Eine erste Durchsicht des Bundles fand keinen Zugriff auf `sv`; eine wiederholte Suche mit anderen Suchbegriffen fand:
 ```js
 setFloor(e){this.sv=e?"1":"0"}
 // ...
 toggleRadiatingFloor:function(e){this.status.setFloor(e),this.setModeHeat(this.status.isModeAC(),e)}
 ```
-`setFloor` actúa sobre `this.status` (el mismo objeto en vivo donde residen `e`/`m`/`tc`), confirmando que `sv` es
-parte del estado de zona real, no solo de configuración estática. Ver `docs/known-unknowns.md` #26.
+`setFloor` wirkt auf `this.status` (dasselbe Live-Objekt, in dem `e`/`m`/`tc` liegen). Damit gehört `sv` zum echten Zonenzustand und nicht nur zur statischen Konfiguration. Siehe `docs/known-unknowns.md` #26.
 
-## 6. Suscripción MQTT
+## 6. MQTT-Abonnement
 
 ```js
 subscribe(e){ ... this.$emitInstance("suscribe", e, `ctl/${e}/#`) }
 ```
-Coincide con el topic `pro/v1/get/ctl/{ref}/#` de la integración (con el prefijo `pro/v1/get/`).
+Entspricht dem Topic `pro/v1/get/ctl/{ref}/#` der Integration (mit dem Präfix `pro/v1/get/`).
 
 ---
 
-## 6b. Conexión MQTT, topics y expiración (CONFIRMADO)
+## 6b. MQTT-Verbindung, Topics und Ablauf der Zugangsdaten (BESTÄTIGT)
 
-### Cliente MQTT y clientId
+### MQTT-Client und clientId
 ```js
 Ha=e=>Fa.device({
   accessKeyId:e.accessKeyId, secretKey:e.secretKey, sessionToken:e.sessionToken,
-  clientId:`mqtt-client_${e.accessKeyId}_${Date.now()}`,   // ÚNICO por conexión
+  clientId:`mqtt-client_${e.accessKeyId}_${Date.now()}`,   // EINDEUTIG je Verbindung
   protocol:"wss", host:e.host
 })
 ```
-- El `clientId` MQTT es **único por conexión** (`mqtt-client_<accessKeyId>_<timestamp>`), **no** el `aws_mqtt_user`.
-- `getClientId()` = `aws_mqtt_user` se usa solo como campo `app` de las instrucciones y en el topic de feedback.
+- Die MQTT-`clientId` ist **je Verbindung eindeutig** (`mqtt-client_<accessKeyId>_<Zeitstempel>`), **nicht** `aws_mqtt_user`.
+- `getClientId()` = `aws_mqtt_user` dient nur als Feld `app` der Anweisungen und im Topic für `feedback`.
 
-### Estructura de topics
+### Aufbau der Topics
 ```js
-subscribe(e){ e=`${this._basePath}get/${e}`; ... }          // suscripción
-publish(e,t){ e=`${this._basePath}set/${e}`; ... }           // publicación (la app usa HTTP para comandos)
+subscribe(e){ e=`${this._basePath}get/${e}`; ... }          // Abonnement
+publish(e,t){ e=`${this._basePath}set/${e}`; ... }           // Veröffentlichen (die App nutzt für Befehle HTTP)
 processTopic(e){ var t=e.split("/"); return {env:t[0],version:t[1],method:t[2],type:t[3],device:t[4],property:t.slice(5).join("/")} }
 ```
-- `_basePath` = `aws_base_topic` (campo de las credenciales) = `pro/v1/`.
-- Estructura: `env/version/method/type/device/property` → p. ej. `pro/v1/get/ctl/{ref}/status`.
-- La integración se suscribe a `pro/v1/get/ctl/{ref}/#` y recibe `.../status`. **Coincide.**
-- Existe además `pro/v1/get/usr/{aws_mqtt_user}/feedback` (ack de instrucciones con `orderId`); la app lo usa para correlacionar comando→respuesta. La integración no lo usa.
+- `_basePath` = `aws_base_topic` (Feld der Zugangsdaten) = `pro/v1/`.
+- Aufbau: `env/version/method/type/device/property` → z. B. `pro/v1/get/ctl/{ref}/status`.
+- Die Integration abonniert `pro/v1/get/ctl/{ref}/#` und empfängt `.../status`. **Stimmt überein.**
+- Zusätzlich gibt es `pro/v1/get/usr/{aws_mqtt_user}/feedback` (Quittung für Anweisungen mit `orderId`); die App ordnet damit Befehl und Antwort zu. Die Integration nutzt es ebenfalls (siehe §8).
 
-### Expiración y refresco (session)
+### Ablauf und Erneuerung (Sitzung)
 ```js
-getExpirationTime(){ return 1e3*expires_at - now }          // token HTTP
-getMqttExpirationTime(){ return 1e3*aws_expires_at - now }  // credenciales AWS
+getExpirationTime(){ return 1e3*expires_at - now }          // HTTP-Token
+getMqttExpirationTime(){ return 1e3*aws_expires_at - now }  // AWS-Zugangsdaten
 getAwsCredential(){ return {host:aws_mqtt_host, basePath:aws_base_topic, accessKeyId, secretKey, sessionToken, clientId:aws_mqtt_user} }
-// controlMqtt: setTimeout(refreshAwsCredentials, getMqttExpirationTime()) → refresca justo antes de expirar y reconecta
+// controlMqtt: setTimeout(refreshAwsCredentials, getMqttExpirationTime()) → erneuert kurz vor Ablauf und verbindet neu
 ```
-- Las credenciales AWS incluyen **`aws_expires_at`** (unix s) y **`aws_base_topic`**; el login incluye **`expires_at`**.
-- La app **refresca proactivamente** las credenciales antes de `aws_expires_at`.
+- Die AWS-Zugangsdaten enthalten **`aws_expires_at`** (Unix-Sekunden) und **`aws_base_topic`**; die Anmeldung liefert **`expires_at`**.
+- Die App **erneuert die Zugangsdaten vorausschauend** vor `aws_expires_at`. Die Integration macht es genauso (`api.seconds_until_aws_credentials_expire` + Timer in `mqtt_handler`). Ohne diese Erneuerung trennt AWS IoT die laufende Verbindung genau beim Ablauf der Zugangsdaten, was zu regelmäßigen Verbindungsabbrüchen führt.
 
-Config del bundle: `VUE_APP_API_DOMAIN="https://api.mysair.es"`, `VUE_APP_OUTSERVICE_MILISECOND="5000"`.
+Konfiguration im Bundle: `VUE_APP_API_DOMAIN="https://api.mysair.es"`, `VUE_APP_OUTSERVICE_MILISECOND="5000"`.
 
-## 7. Impacto en la integración (correcciones derivadas)
+## 7. Auswirkungen auf die Integration
 
-| Área | Estado actual | Corrección confirmada |
-|---|---|---|
-| Comando `mode` heat/cool (solo-aire) | `0`=calor, `1`=frío | ✅ Ya correcto |
-| Parser de estado: modo | Leía `e` como modo | ✅ Corregido (A5): on/off de `e`, calor/frío por paridad de `m` |
-| `switch.turn_on` | Enviaba `mode:"1"` (forzaba frío) | ✅ Corregido (A5): preserva último modo, por defecto calor |
-| `power` off | `value:"0"` | ✅ Ya correcto |
-| Campos `tr/tc/tmm/tmx` | Correctos | ✅ |
-| **`client_id` MQTT** | Usa `aws_mqtt_user` (colisiona con la app → expulsiones) | 🔴 Debe ser único por conexión: `mqtt-client_{accessKeyId}_{ts}` |
-| **Expiración credenciales AWS** | Reutiliza hasta fallar | 🔴 Leer `aws_expires_at` y refrescar antes de expirar (y en cada reconexión) |
-| **Base del topic** | Hardcodea `pro/v1/get/` | 🟡 Debería venir de `aws_base_topic` (fallback al valor actual) |
-| Token HTTP `expires_at` | Refresca solo ante 401 | 🟡 Oportunidad: refresco proactivo |
-| Topic de feedback `usr/{user}/feedback` | No usado | ✅ Consumido: suscripción + evento `mysair_feedback` + log de confirmación/timeout por entidad (ver §8) |
-| Capacidades `c`/`f` (calor/frío) y humedad (`hm`) | Parseadas, sin entidad | ✅ Expuestas: `climate.hvac_modes` dinámico según `allow_heat`/`allow_cool`, sensor de humedad por zona |
-| Capacidades `v`/`s` (fan/suelo) | Parseadas, sin entidad | 🟢 Oportunidad: exponer fan/suelo (no implementado — requiere entender los comandos `fanspeed`) |
-| `tmm`/`tmx` en `climate.min_temp`/`max_temp` | Fijos en 10/30 | ✅ Corregido (C8): se actualizan desde el status MQTT por zona |
-| Comandos `fanspeed/temporizer/stop/programs` | No implementados | 🟢 Oportunidad de nuevas funcionalidades |
+| Bereich | Umsetzung in der Integration |
+|---|---|
+| Befehl `mode` Heizen/Kühlen (nur Luft) | `0`=Heizen, `1`=Kühlen – korrekt |
+| Statusparser: Modus | Ein/Aus aus `e`, Heizen/Kühlen aus der Parität von `m`, Luft/Fußboden aus den Mengen in §4 (`status_parser.parse_mode`) |
+| Einschalten über `switch` | Sendet `mode` und behält den zuletzt bekannten Modus bei |
+| `power` aus | `value:"0"` – korrekt |
+| Felder `tr`/`tc`/`tmm`/`tmx` | korrekt; `tmm`/`tmx` setzen `climate.min_temp`/`max_temp` |
+| MQTT-`client_id` | eindeutig je Verbindung (`mqtt_handler.build_client_id`) |
+| Ablauf der AWS-Zugangsdaten | `aws_expires_at` wird gelesen; Erneuerung vor Ablauf und bei jeder Wiederverbindung |
+| Topic-Basis | aus `aws_base_topic`, Rückfall auf `pro/v1/` |
+| HTTP-Token `expires_at` | Erneuerung bei `401` (noch nicht vorausschauend) |
+| Topic `usr/{user}/feedback` | abonniert; Befehle werden über `orderId` bestätigt, sonst zurückgesetzt (§8) |
+| Fähigkeiten `c`/`f` und Luftfeuchte | `climate.hvac_modes` je nach `allow_heat`/`allow_cool`; Feuchtesensor je Zone |
+| Fähigkeiten `v`/`s` | Lüfterstufe in `climate` (§9); Schalter „Fußbodenheizung“ je Zone |
+| Befehle `fanspeed`/`stop` | umgesetzt (`climate.fan_mode`, Dienst `mysair.stop_installation`) |
+| Befehle `temporizer`/`programs` | bewusst nicht umgesetzt: Das Format zum Setzen ist im Bundle nicht entschlüsselt (siehe `docs/known-unknowns.md` #27) |
 
 ---
 
-## 8. Confirmación de comandos: `orderId` y topic `feedback` (CONFIRMADO)
+## 8. Befehlsbestätigung: `orderId` und Topic `feedback` (BESTÄTIGT)
 
 ```js
-// POST /send/instruction devuelve el orderId en la respuesta:
+// POST /send/instruction liefert die orderId in der Antwort:
 this.$api.instruction(this._generateInstruction(e,t,i,a),
   e=>this.$onceOutInstance("reciveInstruction_"+e.entity.value[0].orderId, ...))
 
-// Suscripción al topic de feedback (una vez, con el clientId de sesión):
+// Abonnement des feedback-Topics (einmal, mit der clientId der Sitzung):
 this.$mqtt.subscribe(`usr/${this.$session.getClientId()}/feedback`,
   e=>{this.$emitInstance("reciveInstruction_"+e.orderId,e)})
-// (subscribe() antepone `${basePath}get/` → pro/v1/get/usr/{aws_mqtt_user}/feedback)
+// (subscribe() stellt `${basePath}get/` voran → pro/v1/get/usr/{aws_mqtt_user}/feedback)
 ```
 
-- La respuesta de `POST /send/instruction` incluye `entity.value[0].orderId` (confirmado; antes solo se leían `msg`/`error`).
-- El ACK llega por MQTT en el topic `pro/v1/get/usr/{aws_mqtt_user}/feedback`, como un objeto con `orderId` (y `ctl`, usado por la app para encadenar con `reciveStatus_{ctl}`) **directamente sobre el objeto que entrega el wrapper MQTT** — sin envoltorio `value` de string JSON como en `status`.
-- **No confirmado con captura real de producción** (`known-unknowns.md` #23): se implementó de forma defensiva (`status_parser.parse_feedback_payload` prueba primero la forma plana y cae a una forma anidada tipo `status` como fallback) para no romper si el backend envuelve este topic de otra manera.
-- `VUE_APP_OUTSERVICE_MILISECOND="5000"` (config del bundle) es el timeout que usa la propia app para dar un comando por perdido — reutilizado tal cual como `FEEDBACK_TIMEOUT_SECONDS` en la integración.
-- **Implementado:** suscripción al topic (`mqtt_handler.build_feedback_topic`), evento `mysair_feedback` en el bus (`__init__.py`), y en `climate.py`/`switch.py` (vía `command_feedback.CommandFeedbackMixin`) log de confirmación si llega el ACK con el `orderId` esperado, o log de aviso si no llega en 5 s. **No se revierte el estado optimista todavía** — eso queda pendiente de validar la forma real del payload en producción (ver `execution-plan.md` Tarea 16).
+- Die Antwort von `POST /send/instruction` enthält `entity.value[0].orderId`.
+- Die Quittung kommt per MQTT im Topic `pro/v1/get/usr/{aws_mqtt_user}/feedback` als flaches Objekt mit `orderId` und `ctl` (die App verkettet damit `reciveStatus_{ctl}`) – ohne den JSON-String-Umschlag `value`, den `status` hat. Echte Nachrichten bestätigen diese flache Form (`docs/known-unknowns.md` #23).
+- Das Topic von `feedback` steht in der Nachricht ohne Klammern vor den Nutzdaten; der Parser darf keine Klammern voraussetzen (siehe `docs/known-unknowns.md` #6).
+- `VUE_APP_OUTSERVICE_MILISECOND="5000"` ist das Zeitlimit, nach dem die App einen Befehl als verloren betrachtet. Die Integration übernimmt den Wert als `FEEDBACK_TIMEOUT_SECONDS`.
+- **Umsetzung:** Abonnement (`mqtt_handler.build_feedback_topic`), Ereignis `mysair_feedback` (`__init__.py`) und in `climate.py`/`switch.py` über `command_feedback.CommandFeedbackMixin`: Bei passender `orderId` gilt der Befehl als bestätigt; kommt nach 5 s nichts, wird der optimistische Zustand auf den letzten bekannten Wert zurückgesetzt. Trifft vorher ein echter Status ein, verfällt die Rücksetzung.
+- Das Backend sendet Quittungen gelegentlich doppelt (gleicher Inhalt, wenige Millisekunden Abstand). Die Integration behandelt das bislang nicht gesondert.
 
 ---
 
-## 9. Velocidad de ventilador: significado de `vv`/`fanspeed` (CONFIRMADO)
+## 9. Lüfterstufe: Bedeutung von `vv`/`fanspeed` (BESTÄTIGT)
 
 ```js
-// Componente REAL de una instalación (no la página de demo/storybook de
-// componentes UI, que usa datos ficticios de ejemplo — ver más abajo):
+// ECHTE Komponente einer Installation (nicht die Demo-/Storybook-Seite der
+// UI-Komponenten, die erfundene Beispieldaten nutzt – siehe unten):
 data(){return{type:"device",
   fanGroups:[{key:"auto",values:{4:"A"}},{key:"manual",values:{1:"1",2:"2",3:"3"}}],
   ...}}
@@ -228,22 +228,22 @@ data(){return{type:"device",
 hasFanMode(){return"0"!=this.vv}
 getFanMode(){return this.vv}
 
-// Click en el icono principal del ventilador (sin elegir grupo):
+// Klick auf das Haupt-Lüftersymbol (ohne Gruppe zu wählen):
 updateFanMode:function(e){
   this.status.setFanMode(e),
   this.setFanspeed(this.installation_ref,this.reference,e,e=>dd(e))
 }
-// onClick del icono principal (toggle): e.updateFanMode(e.status.hasFanMode()?"0":"4")
+// onClick des Hauptsymbols (Umschalter): e.updateFanMode(e.status.hasFanMode()?"0":"4")
 ```
 
-| `vv` | Significado |
+| `vv` | Bedeutung |
 |---|---|
-| `"0"` | Sin modo de ventilador (`hasFanMode()` → `false`) |
-| `"1"` / `"2"` / `"3"` | Velocidad manual 1 / 2 / 3 |
-| `"4"` | Automático (mostrado como "A" en la UI) |
+| `"0"` | Kein Lüftermodus (`hasFanMode()` → `false`) |
+| `"1"` / `"2"` / `"3"` | Manuelle Stufe 1 / 2 / 3 |
+| `"4"` | Automatik (in der App als „A“ angezeigt) |
 
-**⚠️ Trampa encontrada durante la investigación:** una página de demo/storybook de componentes UI en el mismo bundle define un `ventilationGroups:[{key:"",values:["A"]},{key:"manual",values:["1","2","3"]}]` con datos de ejemplo **inventados para mostrar el componente visualmente**, no ligados a ningún `vv` real. Una primera lectura superficial de esa página llevó a anotar esto como "pista sin confirmar" en `known-unknowns.md` #24 — la confirmación real vino de encontrar el componente de instalación de verdad (arriba), que sí liga `fanGroups` directamente a `this.vv` vía `getFanMode()`/`hasFanMode()`. Lección: en bundles con páginas de demo de componentes, verificar siempre que el código citado pertenece al flujo real de datos (aquí: el objeto `status`/`te`, el mismo de `docs/protocol-findings.md §4`), no a una demo aislada con valores de relleno.
+**⚠️ Falle bei der Analyse:** Eine Demo-/Storybook-Seite der UI-Komponenten im selben Bundle definiert `ventilationGroups:[{key:"",values:["A"]},{key:"manual",values:["1","2","3"]}]` mit Beispieldaten, die **nur zur Darstellung des Bauteils erfunden** sind und mit keinem echten `vv` verbunden sind. Ein erster flüchtiger Blick auf diese Seite führte zu einem falschen Zwischenstand. Die eigentliche Bestätigung kam aus der echten Installationskomponente (oben), die `fanGroups` über `getFanMode()`/`hasFanMode()` direkt mit `this.vv` verbindet. Lehre: In Bundles mit Demo-Seiten immer prüfen, ob der zitierte Code zum echten Datenfluss gehört (hier: das Objekt `status`/`te` aus §4) und nicht zu einer isolierten Demo mit Füllwerten.
 
-- **Comando:** `command:"fanspeed"`, `value:""+i` (string del valor de `vv` deseado: `"0"`, `"1"`, `"2"`, `"3"` o `"4"`).
-- **Capacidad:** solo se muestra el control si `allowFan()` (`"1"==this.v`) — ya parseado como `allow_fan` en `status_parser.py`.
-- **Implementado:** `climate.py` expone `fan_mode`/`fan_modes` (HA `ClimateEntityFeature.FAN_MODE`) mapeando `"1"/"2"/"3"` tal cual y `"4"`↔`"auto"`; `async_set_fan_mode` envía `fanspeed` vía `api.send_zone_command`.
+- **Befehl:** `command:"fanspeed"`, `value:""+i` (String des gewünschten `vv`: `"0"`, `"1"`, `"2"`, `"3"` oder `"4"`).
+- **Fähigkeit:** Das Bedienelement erscheint nur bei `allowFan()` (`"1"==this.v`) – in `status_parser.py` als `allow_fan` ausgewertet.
+- **Umsetzung:** `climate.py` stellt `fan_mode`/`fan_modes` bereit (HA `ClimateEntityFeature.FAN_MODE`), `"1"/"2"/"3"` unverändert und `"4"` ↔ `"auto"`; `async_set_fan_mode` sendet `fanspeed` über `api.send_zone_command`.

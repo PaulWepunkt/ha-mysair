@@ -1,142 +1,134 @@
-# CLAUDE.md — Guía para sesiones de Claude Code
+# CLAUDE.md – Leitfaden für Sitzungen mit Claude Code
 
-Integración **custom de Home Assistant** para el sistema de zonificación de climatización **MySair** (aire acondicionado y/o suelo radiante, combinables por zona). Construida por ingeniería inversa de la app web oficial (API HTTP + AWS IoT MQTT). Toda la documentación de referencia está en `docs/`.
-
----
-
-## 1. Propósito del proyecto
-
-Controlar y monitorizar zonas de climatización MySair desde Home Assistant:
-- **Descubrimiento** de topología por HTTP: `Location → Installation (ctl) → Device (zona)`.
-- **Estado en tiempo real** recibido por **MQTT sobre WebSocket** (AWS IoT).
-- **Comandos** (temperatura, modo, encendido) enviados por **HTTP** a `POST /send/instruction` (NO por MQTT).
-
-Dominio HA: `mysair`. Tipo: `hub`. `iot_class`: `cloud_push` (híbrido: push MQTT + refresco HTTP cada 60 s).
+**Custom-Integration für Home Assistant** für das Klima-Zonensystem **MySair** (Klimaanlage und/oder Fußbodenheizung bzw. -kühlung, je Zone kombinierbar). Entstanden durch Analyse der offiziellen Web-App (HTTP-API + AWS-IoT-MQTT). Die gesamte Referenzdokumentation liegt in `docs/`.
 
 ---
 
-## 2. Arquitectura resumida
+## 1. Zweck des Projekts
+
+MySair-Klimazonen aus Home Assistant steuern und überwachen:
+- **Erkennung** des Aufbaus per HTTP: `Location → Installation (ctl) → Device (Zone)`.
+- **Zustand in Echtzeit** per **MQTT über WebSocket** (AWS IoT).
+- **Befehle** (Temperatur, Modus, Ein/Aus, Lüfter) per **HTTP** an `POST /send/instruction` (NICHT per MQTT).
+
+HA-Domain: `mysair`. Typ: `hub`. `iot_class`: `cloud_push` (Push per MQTT, dazu alle 120 s eine HTTP-Anforderung des Status).
+
+---
+
+## 2. Architektur in Kurzform
 
 ```
-config_flow.py ──login──► api.py (MySairAPI, HTTP síncrono con requests)
+config_flow.py ──login──► api.py (MySairAPI, synchrones HTTP mit requests)
 __init__.py (async_setup_entry):
-   login → get_locations → get_installations → get_devices
+   refresh_tokens → get_locations → get_installations → get_devices
+   → _cleanup_stale_zone_devices (verschwundene Zonen entfernen)
    → hass.data[DOMAIN][entry_id] = {api, devices, installations, mqtt, coordinator}
-   → MySairMQTTClient.start()  (hilo daemon, WSS a AWS IoT)
-   → MySairCoordinator.start()  (coordinator.py, C1: único suscriptor del bus por entry)
-   → forward a plataformas: climate, sensor, switch
-   → refresh_status_periodic()  (task, POST status cada 60 s)
+   → MySairMQTTClient.start()  (Daemon-Thread, WSS zu AWS IoT)
+   → MySairCoordinator.start()  (coordinator.py, einziger Bus-Abonnent je Entry)
+   → Plattformen laden: climate, sensor, switch
+   → refresh_status_periodic()  (Hintergrund-Task, status alle 120 s)
 
-MQTT (mqtt_handler.py) recibe .../status
-   → mqtt_message_callback (en __init__.py) parsea t[] → zonas
+MQTT (mqtt_handler.py) empfängt .../status
+   → mqtt_message_callback (__init__.py) → status_parser.parse_status_payload
    → hass.bus.async_fire("mysair_update", {topic, data})
-   → MySairCoordinator (único suscriptor por config entry, C1) filtra por
-     instalación propia y redistribuye cada zona por separado vía
-     homeassistant.helpers.dispatcher (signal_zone_update(ctl, zone_id))
-   → cada entidad se suscribe solo a la señal de su propia zona, ya sin
-     filtrar ctl/zone_id, y actualiza estado
+   → MySairCoordinator filtert nach eigener Installation und verteilt jede Zone
+     einzeln über homeassistant.helpers.dispatcher (signal_zone_update(ctl, zone_id))
+   → jede Entität abonniert nur das Signal ihrer Zone und aktualisiert ihren Zustand
 
-Comando de entidad → api.send_zone_command → POST /send/instruction (devuelve orderId)
-   → backend reenvía al dispositivo → estado vuelve por MQTT (reconciliación)
-   → ACK vuelve por MQTT en .../usr/{aws_mqtt_user}/feedback (orderId, ctl)
+Befehl einer Entität → api.send_zone_command → POST /send/instruction (liefert orderId)
+   → Backend leitet an das Gerät weiter → Zustand kommt per MQTT zurück
+   → Quittung kommt per MQTT auf .../usr/{aws_mqtt_user}/feedback (orderId, ctl)
    → hass.bus.async_fire("mysair_feedback", {order_id, ctl, raw})
-   → CommandFeedbackMixin (command_feedback.py, climate.py/switch.py) loguea
-     confirmación, o aviso si no llega en FEEDBACK_TIMEOUT_SECONDS (5 s)
+   → CommandFeedbackMixin (command_feedback.py) bestätigt den Befehl oder setzt den
+     optimistischen Zustand nach FEEDBACK_TIMEOUT_SECONDS (5 s) zurück
 ```
 
-Detalle completo: `docs/architecture.md`. **Los comandos van por HTTP, el estado por MQTT.**
+Details: `docs/architecture.md`. **Befehle laufen über HTTP, der Zustand über MQTT.**
 
 ---
 
-## 3. Comandos
+## 3. Befehle
 
-Tests y lint configurados en CI (`.github/workflows/tests.yml`, 4 jobs independientes: `pure-tests`, `ha-harness-tests`, `hassfest`, `ruff`):
+Tests und Lint laufen in der CI (`.github/workflows/tests.yml` mit den Jobs `pure-tests`, `ha-harness-tests`, `hassfest`, `ruff`; dazu `.github/workflows/hacs.yml`):
 
 ```bash
-# Tests P0/P1 (NO requieren Home Assistant, Python 3.9+, en la máquina local)
+# Tests P0/P1 (OHNE Home Assistant, lokal)
 python -m venv .venv-test && source .venv-test/bin/activate
 pip install -r requirements-test.txt
-pytest                      # 173 tests: parser, builders MQTT, firma SigV4, cliente HTTP
-                             # (los ficheros P2 se saltan aquí vía pytest.importorskip)
+pytest                      # Parser, MQTT-Builder, SigV4-Signatur, HTTP-Client
+                            # (Dateien, die HA brauchen, werden per pytest.importorskip übersprungen)
 
-# Tests P2 (harness de Home Assistant): vía Docker, no toca la máquina del desarrollador
-docker compose run --rm test-ha    # 253 tests en total (P0/P1 + config flow + setup/unload + entidades + feedback + disponibilidad + fan_mode + refresco proactivo MQTT + revert optimista + parser MQTT estricto + backoff con jitter + servicio stop_installation + diagnostics + coordinador de zona + sensor de conexión MQTT + reensamblado de frames + validación de payloads + control de suelo radiante + reload/multi-instalación/topología)
+# Tests P2/P3 (HA-Testumgebung) über Docker, ohne Installation auf dem Rechner
+docker compose run --rm test-ha    # komplette Suite
 
-# Lint / formato (ruff, config en pyproject.toml — reglas por defecto únicamente)
+# Lint / Formatierung (ruff, Konfiguration in pyproject.toml – nur Standardregeln)
 pip install -r requirements-lint.txt
 ruff check custom_components/mysair tests
 ruff format custom_components/mysair tests
 ```
 
-- Los tests **puros** (parser, builders MQTT, firma SigV4, `MySairAPI` con `session` inyectada)
-  corren sin HA porque `tests/conftest.py` añade `custom_components/mysair` a `sys.path` e importa
-  esos módulos como top-level (no ejecutan el `__init__.py` del paquete).
-- Los tests con **harness de HA** (`test_config_flow.py`, `test_init_setup_unload.py`,
-  `test_entities.py`) requieren `homeassistant` + `pytest-homeassistant-custom-component`
-  (Python ≥3.14, que es lo que exige HA 2026.9), instalados solo dentro de `Dockerfile.test` —
-  no en el entorno local. **Mantener al día el pin de `pytest-homeassistant-custom-component`
-  en `requirements-test-ha.txt`**: llegó a quedarse en HA 2025.1.4 mientras en producción corría
-  2026.9, y con el harness 20 versiones por detrás las deprecaciones pasan desapercibidas.
-  Ver `docs/testing-strategy.md`.
+- Die **reinen** Tests (Parser, MQTT-Builder, SigV4-Signatur, `MySairAPI` mit injizierter `session`) laufen ohne HA, weil `tests/conftest.py` `custom_components/mysair` in `sys.path` einträgt und diese Module direkt importiert (ohne das `__init__.py` des Pakets auszuführen).
+- Die Tests mit **HA-Testumgebung** (`test_config_flow.py`, `test_init_setup_unload.py`, `test_entities.py` u. a.) benötigen `homeassistant` + `pytest-homeassistant-custom-component` (Python ≥ 3.14, Voraussetzung von HA 2026.9). Beides wird nur in `Dockerfile.test` installiert. **Den Pin von `pytest-homeassistant-custom-component` in `requirements-test-ha.txt` aktuell halten**: Bleibt er hinter der produktiv genutzten HA-Version zurück, bleiben Abkündigungen unbemerkt. Siehe `docs/testing-strategy.md`.
 
-> ⚠️ **Nunca** ejecutes el código contra servidores reales de MySair para "probar".
+> ⚠️ Den Code **nie** gegen echte MySair-Server ausführen, um etwas „auszuprobieren“.
 
 ---
 
-## 4. Estructura de archivos
+## 4. Dateistruktur
 
-El código de la integración vive en `custom_components/mysair/` (layout estándar HA/HACS).
-Los tests y la documentación están en la raíz del repo.
+Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA/HACS). Tests und Dokumentation liegen im Wurzelverzeichnis.
 
-| Archivo (`custom_components/mysair/`) | Rol |
+| Datei (`custom_components/mysair/`) | Aufgabe |
 |---|---|
-| `__init__.py` | Setup/unload, callback MQTT, refresco periódico. `async_unload_entry` a nivel de módulo |
-| `api.py` | `MySairAPI`: HTTP síncrono (`requests`, `session` inyectable) + firma AWS SigV4 |
-| `status_parser.py` | Parsers **puros** de `status` (`parse_status_payload`) y `feedback` (`parse_feedback_payload`), sin dependencia de HA |
-| `mqtt_handler.py` | `MySairMQTTClient`: MQTT crudo sobre WebSocket (`websocket-client`) |
-| `device.py` | `zone_device_info`/`account_device_info`: dispositivo compartido por las 7 entidades de una zona (antes duplicado en cada una). El nombre del dispositivo es el de la zona porque HA lo antepone al de cada entidad (`has_entity_name`) |
-| `coordinator.py` | `MySairCoordinator` (C1): único suscriptor de `mysair_update` por config entry; filtra y redistribuye cada zona por separado vía `homeassistant.helpers.dispatcher` |
-| `command_feedback.py` | `CommandFeedbackMixin`: correlación de comandos con el ACK de `mysair_feedback` (climate/switch) |
-| `availability.py` | `AvailabilityMixin`: `should_poll=False` + `available` según frescura del último status MQTT (todas las entidades) |
-| `climate.py` | `MySairThermostat` (ClimateEntity) |
-| `sensor.py` | 4 sensores por zona (temp actual, consigna, modo, humedad) + `MySairMqttStatusSensor` (D3/D4): 1 por config entry, estado online/offline y métricas de reconexión/parseo |
-| `switch.py` | `MySairSwitch` (power on/off) + `MySairFloorSwitch` (suelo radiante on/off, F4) |
-| `config_flow.py` | Config flow (email + password) |
-| `const.py` | Constantes (algunas sin uso: `HVAC_MODES` con `auto`, `SCAN_INTERVAL`) |
-| `diagnostics.py` | Volcado de diagnóstico descargable desde la UI de HA, redactando credenciales/tokens (D1) |
-| `services.yaml` | Esquema de UI del servicio `mysair.stop_installation` (F5) |
-| `strings.json` | Textos del config flow y del servicio en inglés (fuente de referencia; HA **no** lo lee en runtime para integraciones custom) |
-| `translations/en.json` | Copia de `strings.json`. Es lo que HA carga de verdad para el idioma inglés — sin este fichero se ven las claves crudas |
-| `translations/es.json` | Traducción al español del config flow y del servicio (C4) |
-| `manifest.json` | Manifiesto (`requirements`: solo `requests` y `websocket-client`) |
+| `__init__.py` | Setup/Unload, MQTT-Callback, periodische Abfrage, Dienst `mysair.stop_installation`, Entfernen verwaister Zonen |
+| `api.py` | `MySairAPI`: synchrones HTTP (`requests`, injizierbare `session`), Fehlerklassifizierung (`_http_error`), AWS-SigV4-Signatur |
+| `status_parser.py` | **Reine** Parser für `status` (`parse_status_payload`, `parse_mode`, `parse_humidity`, `compute_mode_value`) und `feedback` (`parse_feedback_payload`), ohne HA-Abhängigkeit |
+| `mqtt_handler.py` | `MySairMQTTClient`: MQTT von Hand über WebSocket (`websocket-client`), Empfangspuffer, Backoff, vorausschauende Erneuerung |
+| `coordinator.py` | `MySairCoordinator`: einziger Abonnent von `mysair_update` je Config Entry; verteilt jede Zone über den Dispatcher |
+| `command_feedback.py` | `CommandFeedbackMixin`: ordnet Befehle der Quittung aus `mysair_feedback` zu und setzt bei Zeitüberschreitung zurück (climate/switch) |
+| `availability.py` | `AvailabilityMixin`: `should_poll=False` + `available` nach Aktualität des letzten MQTT-Status |
+| `device.py` | `zone_device_info`/`account_device_info`: gemeinsames Gerät für alle Entitäten einer Zone bzw. für das Konto. Der Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`) |
+| `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
+| `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) |
+| `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) |
+| `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort) und Reauth |
+| `const.py` | Konstanten (Zeitlimits, Abfrageintervall des Verbindungssensors, Dienstname) |
+| `diagnostics.py` | Diagnose-Download in der HA-Oberfläche mit geschwärzten Zugangsdaten/Token |
+| `services.yaml` | Schema des Dienstes `mysair.stop_installation` |
+| `strings.json` | Englische Texte (Referenz; HA liest sie bei Custom-Integrationen zur Laufzeit **nicht**) |
+| `translations/en.json` | Kopie von `strings.json`; das lädt HA tatsächlich für Englisch |
+| `translations/de.json`, `translations/es.json` | Deutsch und Spanisch: Einrichtungsdialog, Dienst, Entitätsnamen und -zustände |
+| `icons.json` | Symbole je `translation_key` und Zustand |
+| `brand/` | Symbol und Logo (lokal, ab HA 2026.3.0) |
+| `manifest.json` | Manifest (`requirements`: nur `requests` und `websocket-client`) |
 
-| Raíz del repo | Rol |
+| Wurzelverzeichnis | Aufgabe |
 |---|---|
-| `tests/` | Tests P0/P1 (no requieren HA) + `conftest.py` con fixtures sanitizadas |
-| `pytest.ini`, `requirements-test.txt` | Configuración y dependencias de test |
-| `pyproject.toml`, `requirements-lint.txt` | Config de `ruff` (reglas por defecto) y su dependencia pinned |
-| `docs/` | Documentación de arquitectura, protocolos, dominio, tests, seguridad |
-| `hacs.json` | Metadatos para instalar el repo como repositorio personalizado de HACS |
-| `README.md` | Instalación, configuración, entidades, limitaciones (cara pública del proyecto) |
-| `CHANGELOG.md` | Historial de versiones (Keep a Changelog + SemVer) |
+| `tests/` | Tests + `conftest.py` mit bereinigten Fixtures |
+| `pytest.ini`, `requirements-test.txt` | Konfiguration und Abhängigkeiten der reinen Tests |
+| `Dockerfile.test`, `docker-compose.yml`, `requirements-test-ha.txt` | HA-Testumgebung |
+| `pyproject.toml`, `requirements-lint.txt` | Konfiguration von `ruff` (Standardregeln) und gepinnte Abhängigkeit |
+| `docs/` | Dokumentation zu Architektur, Protokollen, Domäne, Tests, Sicherheit |
+| `hacs.json` | Metadaten für HACS (inkl. Mindestversion von HA) |
+| `README.md` | Installation, Einrichtung, Entitäten, Einschränkungen |
+| `CHANGELOG.md` | Versionsgeschichte (Keep a Changelog + SemVer) |
 | `LICENSE` | MIT |
 
-> Nota: `select.py` fue **eliminado** en estabilización (código muerto/roto). Ver `docs/execution-plan.md`.
-
 ---
 
-## 5. Convenciones de código (observadas)
+## 5. Code-Konventionen
 
-- Cliente HTTP **síncrono** (`requests`) SIEMPRE invocado desde el loop vía `hass.async_add_executor_job(...)`. No introducir llamadas de red bloqueantes en el event loop.
-- MQTT corre en **hilo daemon**; para volver al loop se usa `hass.loop.call_soon_threadsafe(...)`.
-- Entidades se comunican con los datos vía el **event bus** (`mysair_update`), no directamente con el cliente MQTT.
-- Handlers de evento decorados con `@callback`.
+- Synchroner HTTP-Client (`requests`) wird IMMER aus dem Loop über `hass.async_add_executor_job(...)` aufgerufen. Keine blockierenden Netzaufrufe im Event-Loop.
+- MQTT läuft in einem **Daemon-Thread**; zurück in den Loop geht es mit `hass.loop.call_soon_threadsafe(...)`.
+- Entitäten erhalten Daten über **Event-Bus und Koordinator** (`mysair_update` → Dispatcher-Signal je Zone), nicht direkt vom MQTT-Client.
+- Ereignis-Handler mit `@callback` dekorieren.
 - Log-Meldungen mit Präfix `[MySair ...]`, ohne Emojis.
 - Code-Kommentare, Docstrings und Log-Meldungen auf Englisch.
+- Sichtbare Texte (Namen, Zustände, Fehler) nur über `strings.json`/`translations/` und `translation_key`, nicht fest im Code.
 
 ---
 
-## 6. Restricciones importantes (LEER antes de tocar nada)
+## 6. Wichtige Einschränkungen (VOR jeder Änderung lesen)
 
 0. **Öffentliches Repository – keine personenbezogenen oder anlagenspezifischen Daten.** Gilt für Code, Kommentare, Tests, Dokumentation, Commit-Nachrichten und Pull-Request-Texte:
    - **Git-Identität:** niemals eine private E-Mail-Adresse als Autor oder Committer verwenden. Ausschließlich die GitHub-noreply-Adresse des Repository-Inhabers (`<id>+<login>@users.noreply.github.com`). Vor jedem Push mit `git log --format='%an <%ae> | %cn <%ce>'` prüfen.
@@ -145,146 +137,122 @@ Los tests y la documentación están en la raíz del repo.
    - **Formulierung:** Dokumentation beschreibt das Verhalten allgemein und für sich verständlich, ohne Bezug auf Gesprächsverläufe, einzelne Nutzer oder Testsituationen.
    - **Sprache:** Programmcode und Code-Kommentare auf Englisch; Dokumentation, CHANGELOG, Commit-Nachrichten und Pull-Request-Texte auf Deutsch.
 
-1. **No hacer peticiones a producción.** No ejecutar `login`, `send_instruction`, ni conectar MQTT contra `api.mysair.es` / AWS IoT reales durante el desarrollo asistido.
-2. **No cambiar el estado de una instalación real.** Los comandos (`mode`, `temp`, `power`) afectan hardware físico.
-3. **Secretos:** no imprimir ni commitear `password`, `access_token`, `refresh_token`, `aws_secret_access_key`, `aws_security_token`, ni URLs firmadas. Ver `docs/security-and-privacy.md`.
-4. **Protocolo no documentado:** no inventar campos ni endpoints. Marcar suposiciones con `# TODO(verify)` y consultar `docs/known-unknowns.md`.
-5. **Codificación de modo sin confirmar** (comando `0/1` vs status `0/1/2`): NO cambiar la lógica de modo sin resolver `known-unknowns` #1/#2/#4.
+1. **Keine Anfragen an Produktivsysteme.** Während der unterstützten Entwicklung kein `login`, kein `send_instruction` und keine MQTT-Verbindung zu `api.mysair.es` / echtem AWS IoT.
+2. **Den Zustand einer echten Anlage nicht verändern.** Befehle (`mode`, `temp`, `power`, `fanspeed`, `stop`) wirken auf echte Hardware.
+3. **Geheimnisse:** `password`, `access_token`, `refresh_token`, `aws_secret_access_key`, `aws_security_token` und signierte URLs weder ausgeben noch committen. Siehe `docs/security-and-privacy.md`.
+4. **Undokumentiertes Protokoll:** keine Felder oder Endpunkte erfinden. Annahmen mit `# TODO(verify)` markieren und `docs/known-unknowns.md` prüfen.
+5. **Kodierung des Modus:** `e` = Ein/Aus/Standby, `m` = Modus 0–5 (gerade = Heizen, ungerade = Kühlen; Luft/Fußboden nach `docs/protocol-findings.md` §4). Diese Logik nur mit neuen Belegen ändern (`known-unknowns` #1, #2, #4).
 
 ---
 
-## 7. Recetas de desarrollo
+## 7. Anleitungen für die Entwicklung
 
-### Añadir una entidad (nueva plataforma)
-1. Crear `nueva_plataforma.py` con `async_setup_entry(hass, entry, async_add_entities)`.
-2. Leer `data = hass.data[DOMAIN][entry.entry_id]`; iterar `data["devices"]` (dict `inst_ref → [device,...]`).
-3. En la entidad: `unique_id` estable `mysair_<tipo>_{inst_ref}_{device_id}`, `device_info` con `identifiers={(DOMAIN, f"{inst_ref}_{device_id}")}`.
-4. Suscribir a `mysair_update` en `async_added_to_hass`; desuscribir en `async_will_remove_from_hass`.
-5. En el handler `@callback`, filtrar `topic.endswith("/status")`, `data["ctl"]==inst_ref`, y `zone["zone_id"]==device_id`.
-6. **Añadir la plataforma a `PLATFORMS` en `__init__.py:14`** (error común: olvidarlo, como pasó con `select`).
+### Entität hinzufügen (neue Plattform)
+1. `neue_plattform.py` mit `async_setup_entry(hass, entry, async_add_entities)` anlegen.
+2. `data = hass.data[DOMAIN][entry.entry_id]` lesen; über `data["devices"]` iterieren (dict `inst_ref → [device, ...]`).
+3. In der Entität: stabile `unique_id` `mysair_<typ>_{inst_ref}_{device_id}`, `device_info=zone_device_info(...)` aus `device.py`, `_attr_has_entity_name = True` und einen `translation_key` (Texte in `strings.json` und allen `translations/*.json`, Symbol in `icons.json`).
+4. In `async_added_to_hass` das Signal der Zone abonnieren: `async_dispatcher_connect(hass, signal_zone_update(inst_ref, device_id), self._handle_zone_update)`; in `async_will_remove_from_hass` lösen.
+5. `AvailabilityMixin` einbinden und im Handler (`@callback`) den Status als empfangen markieren.
+6. **Die Plattform in `PLATFORMS` in `__init__.py` eintragen** (häufiger Fehler).
 
-### Añadir un comando
-1. En `api.MySairAPI.send_zone_command` (`api.py:236`) añadir un nuevo `command_type` construyendo el `value` adecuado.
-2. La instrucción es `[{sender:"WEB", ctl, app, device, command, value}]` a `POST /send/instruction`.
-3. Llamar desde la entidad con `await hass.async_add_executor_job(api.send_zone_command, inst_ref, device_id, tipo, ...)`.
-4. Estado optimista opcional + reconciliación por MQTT. Documentar el `value` en `docs/mysair-http-api.md`.
+### Befehl hinzufügen
+1. In `api.MySairAPI.send_zone_command` einen neuen `command_type` mit passendem `value` ergänzen.
+2. Die Anweisung lautet `[{sender:"WEB", ctl, app, device, command, value}]` an `POST /send/instruction`.
+3. Aus der Entität mit `await hass.async_add_executor_job(api.send_zone_command, inst_ref, device_id, typ, ...)` aufrufen.
+4. Optimistischen Zustand setzen und über `CommandFeedbackMixin` eine Rücksetzfunktion übergeben. `value` in `docs/mysair-http-api.md` dokumentieren.
 
-### Añadir soporte para un mensaje MQTT
-1. El parsing vive en `mqtt_message_callback` (`__init__.py`). Hoy procesa `.../status` (→ `mysair_update`) y `.../feedback` (→ `mysair_feedback`, ver `status_parser.parse_feedback_payload`).
-2. Para un topic/tipo nuevo: añadir una rama según sufijo de topic, parsear y emitir en su propio evento (no reutilices `mysair_update`/`mysair_feedback` para algo distinto) con una estructura `data` normalizada.
-3. Si hace falta suscribirse a un topic nuevo (no solo procesar uno que ya llega): añadir un `build_<algo>_topic()` puro en `mqtt_handler.py` y suscribir en el handler de CONNACK (ver `build_feedback_topic`/su uso como ejemplo).
-4. Actualizar las entidades que deban consumirlo y documentar el topic/payload en `docs/mysair-mqtt-protocol.md`.
-5. Recuerda: el frame se recibe en `mqtt_handler._on_message` — parsing frágil por `split`/`{...}`.
+### Unterstützung für eine MQTT-Nachricht hinzufügen
+1. Die Auswertung liegt in `mqtt_message_callback` (`__init__.py`). Heute: `.../status` (→ `mysair_update`) und `.../feedback` (→ `mysair_feedback`, siehe `status_parser.parse_feedback_payload`).
+2. Für ein neues Topic: einen Zweig nach Topic-Endung ergänzen, auswerten und als eigenes Ereignis mit normalisierter `data` senden (`mysair_update`/`mysair_feedback` nicht für anderes wiederverwenden).
+3. Muss ein neues Topic abonniert werden: eine reine Funktion `build_<name>_topic()` in `mqtt_handler.py` anlegen und im CONNACK-Handler abonnieren (Vorbild: `build_feedback_topic`).
+4. Betroffene Entitäten anpassen und Topic/Nutzdaten in `docs/mysair-mqtt-protocol.md` dokumentieren.
+5. Pakete werden in `mqtt_handler` über den Empfangspuffer und `parse_mqtt_publish` zerlegt; die Text-Heuristik ist nur Rückfall.
 
-### Modificar la API HTTP
-1. Todos los endpoints están en `api.py`. Añade el método siguiendo el patrón: header `Authorization: Bearer`, `timeout`, comprobación de `status_code`, extracción de `entity`.
-2. Invócalo siempre desde el loop con `async_add_executor_job`.
-3. Documenta el endpoint en `docs/mysair-http-api.md` con su nivel de certeza.
+### HTTP-API ändern
+1. Alle Endpunkte stehen in `api.py`. Neue Methoden über `_authed_request`/`_authed_get_entity` bauen (Header, Zeitlimit, Wiederholung bei 401, Fehlerklassifizierung).
+2. Immer aus dem Loop über `async_add_executor_job` aufrufen.
+3. Den Endpunkt mit Gewissheitsstufe in `docs/mysair-http-api.md` dokumentieren.
 
-### Trabajar sin un dispositivo real
-- Usa las **fixtures sanitizadas** de `docs/testing-strategy.md` (§5).
-- Mockea `requests` (con `requests-mock`) y los frames MQTT (bytes construidos con los builders).
-- Prueba las funciones puras: `encode_varint`, `build_mqtt_connect`, `build_mqtt_subscribe`, `aws_sign_url` (con reloj fijo), y el parser de status (tras extraerlo).
+### Ohne echtes Gerät arbeiten
+- Die **bereinigten Fixtures** aus `tests/conftest.py` bzw. `docs/testing-strategy.md` §5 nutzen.
+- HTTP über die injizierbare `session` ersetzen; MQTT-Frames mit den Builder-Funktionen als Bytes erzeugen.
+- Reine Funktionen testen: `encode_varint`, `build_mqtt_connect`, `build_mqtt_subscribe`, `parse_mqtt_publish`, `aws_sign_url` (mit fester Uhr), die Parser in `status_parser.py`.
 
 ---
 
-## 8. Checklist antes de MODIFICAR código
+## 8. Checkliste vor einer Code-ÄNDERUNG
 
-- [ ] ¿He leído la doc relevante en `docs/` (arquitectura + protocolo afectado)?
-- [ ] ¿El cambio evita llamadas a producción y cambios de estado real?
-- [ ] ¿Toca la codificación de modo? Si sí, ¿están resueltos `known-unknowns` #1/#2/#4?
-- [ ] ¿Añade red bloqueante? Debe ir por `async_add_executor_job`.
-- [ ] ¿Registra recursos (hilos, tasks, listeners)? Deben poder cancelarse en unload.
-- [ ] ¿Introduce logs con secretos? No.
+- [ ] Relevante Dokumentation in `docs/` gelesen (Architektur + betroffenes Protokoll)?
+- [ ] Vermeidet die Änderung Aufrufe an Produktivsysteme und Änderungen am echten Zustand?
+- [ ] Betrifft sie die Kodierung des Modus? Wenn ja: neue Belege vorhanden?
+- [ ] Blockierendes Netz? Dann über `async_add_executor_job`.
+- [ ] Registriert sie Ressourcen (Threads, Tasks, Listener)? Diese müssen beim Unload beendet werden.
+- [ ] Logs mit Geheimnissen? Nein.
+- [ ] Neue sichtbare Texte? In allen Übersetzungsdateien ergänzt?
 
-## 9. Checklist antes de un COMMIT
+## 9. Checkliste vor einem COMMIT
 
-- [ ] Sin credenciales, tokens ni capturas reales en el diff.
-- [ ] `ruff check` y `ruff format` limpios (job `ruff` en CI, ver §3).
-- [ ] Tests relevantes pasan (`pytest`), o se explica por qué no aplica.
-- [ ] Documentación en `docs/` actualizada si cambió el protocolo o la arquitectura.
-- [ ] Si añadiste plataforma: está en `PLATFORMS`.
-- [ ] Mensaje de commit descriptivo.
-- [ ] Rama distinta de `main` si se pedirá PR (no commitear en `main` sin permiso del usuario).
+- [ ] Keine Zugangsdaten, Token, echten Mitschnitte oder anlagenspezifischen Daten im Diff (§6, Punkt 0).
+- [ ] `ruff check` und `ruff format` ohne Befund (Job `ruff` in der CI, §3).
+- [ ] Relevante Tests bestehen (`pytest` bzw. Docker), oder es ist begründet, warum nicht.
+- [ ] Dokumentation in `docs/` und `CHANGELOG.md` aktualisiert, wenn sich Protokoll, Architektur oder Verhalten geändert hat.
+- [ ] Neue Plattform in `PLATFORMS`?
+- [ ] Aussagekräftige Commit-Nachricht auf Deutsch.
+- [ ] Autor und Committer sind die noreply-Adresse (§6, Punkt 0).
+- [ ] Nicht direkt auf `main` committen.
 
-### Flujo de ramas (origin)
+### Branch-Ablauf (origin)
 
-Solo existen `main` y `develop` en `origin`; no dejar ramas de feature huérfanas tras el merge.
+Auf `origin` existiert dauerhaft nur `main`; Feature-Branches werden nach dem Merge gelöscht.
 
-1. Crear una rama de feature corta **desde `develop`** (nombre descriptivo, p. ej. `mqtt-robustness`).
-2. Commits + PR **contra `develop`**; borrar la rama al fusionar (`gh pr merge --delete-branch` o equivalente).
-3. `develop` se fusiona contra `main` **cuando el usuario lo pida o lo considere necesario** (release), no automáticamente en cada PR.
-4. **Tras fusionar a `main`**, crear siempre una release de GitHub con tag `v<version>` (la misma `version` de `manifest.json` en ese momento), por ejemplo:
+1. Einen kurzen Feature-Branch **von `main`** anlegen (sprechender Name, z. B. `fix/instruction-msg`).
+2. Commits pushen und einen Pull Request **gegen `main`** anlegen. PR-Titel und -Text auf Deutsch, ohne automatisch angehängte Sitzungs- oder Chatlinks.
+3. Nach dem Merge den Branch löschen.
+4. **Nach einem Merge, der ausgeliefert werden soll**, die Version in `manifest.json` erhöhen, den Abschnitt `[Unreleased]` im `CHANGELOG.md` in eine Version umbenennen und ein GitHub-Release mit Tag `v<version>` anlegen, z. B.:
    ```bash
-   gh release create v2.10.1 --target main --title "v2.10.1" --notes "<sección correspondiente de CHANGELOG.md>"
+   gh release create v2.13.2 --target main --title "v2.13.2" --notes "<Abschnitt dieser Version aus CHANGELOG.md>"
    ```
-   **Motivo:** HACS solo muestra un número de versión con sentido si sigue una release de GitHub con tag; sin ninguna release, cae de vuelta a mostrar el hash del commit que está trackeando en `main` (p. ej. `16ed989`), que no significa nada para el usuario. Usar como notas de la release el bloque correspondiente de `CHANGELOG.md` (la sección de esa versión, ya escrita en español).
+   **Grund:** HACS zeigt nur dann eine sinnvolle Versionsnummer und ein Update an, wenn es ein GitHub-Release mit Tag gibt. Ohne Release zeigt HACS den Hash des verfolgten Commits auf `main` (z. B. `16ed989`), der Nutzern nichts sagt.
 
 ---
 
-## 10. Enlaces a la documentación generada
+## 10. Dokumentation
 
-- Arquitectura y diagramas: `docs/architecture.md`
-- API HTTP: `docs/mysair-http-api.md`
-- Protocolo MQTT: `docs/mysair-mqtt-protocol.md`
-- Modelo de dominio: `docs/domain-model.md`
-- Ciclo de vida en HA + evaluación: `docs/home-assistant-integration.md`
-- Estrategia de tests + fixtures: `docs/testing-strategy.md`
-- Seguridad y privacidad: `docs/security-and-privacy.md`
-- Incógnitas abiertas: `docs/known-unknowns.md`
-- Roadmap: `docs/development-roadmap.md`
+- Architektur und Diagramme: `docs/architecture.md`
+- HTTP-API: `docs/mysair-http-api.md`
+- MQTT-Protokoll: `docs/mysair-mqtt-protocol.md`
+- Erkenntnisse aus der offiziellen App: `docs/protocol-findings.md`
+- Domänenmodell: `docs/domain-model.md`
+- Lebenszyklus in HA und Bewertung: `docs/home-assistant-integration.md`
+- Teststrategie und Fixtures: `docs/testing-strategy.md`
+- Sicherheit und Datenschutz: `docs/security-and-privacy.md`
+- Offene Fragen: `docs/known-unknowns.md`
+- Roadmap und offene Punkte: `docs/development-roadmap.md`
+- Zusammenfassung der umgesetzten Aufgaben: `docs/execution-plan.md`
 
 ---
 
-## 11. Estado de bugs conocidos
+## 11. Wichtige Erkenntnisse und offene Punkte
 
-Corregidos en el bloque de estabilización + A5 (rama `stabilization`):
-- ✅ **Unload:** `async_unload_entry` a nivel de módulo con cierre limpio.
-- ✅ **Tarea periódica:** cancelable (`async_create_background_task`), intervalo 120 s.
-- ✅ **`select.py`:** eliminado.
-- ✅ **Codificación de estado:** `e`=encendido, modo=paridad de `m` (antes se leía `e` como modo). Ver `docs/protocol-findings.md`.
-- ✅ **`switch.turn_on`:** ya no fuerza frío; enciende con `mode` preservando el último modo (por defecto calor).
-- ✅ **`requirements`:** solo `requests` + `websocket-client`.
-- ✅ **`client_id` MQTT único** por conexión (#20; antes `aws_mqtt_user` → expulsiones con la app).
-- ✅ **Refresco de credenciales AWS por `aws_expires_at`** en cada reconexión (#22; antes reutilizaba firma caducada).
-- ✅ **Topic desde `aws_base_topic`** con fallback (#5); log de conexión ya no filtra la URL firmada.
-- ✅ **Validado en producción** (2026-07-20) contra una cuenta real: descubrimiento, MQTT (client_id único sin expulsar la app oficial) y estado en tiempo real funcionan correctamente.
-- ✅ **`password` ya no se guarda en claro** (A6): la config entry solo persiste `email` + `refresh_token`; la sesión se renueva en cada arranque con `MySairAPI.refresh_tokens()`. Migración automática elimina `password`/`access_token` de entradas antiguas en el primer arranque tras actualizar.
-- ✅ **`unique_id`** en la config entry (C2): evita añadir la misma cuenta dos veces.
-- ✅ **Reauth flow** (C3): `ConfigEntryAuthFailed`/`ConfigEntryNotReady` en `async_setup_entry` + `async_step_reauth` en `config_flow.py`.
-- ✅ **El reauth nunca llegaba a dispararse** (2026-09-11, incidente real en producción): el backend es Laravel Passport y responde **404**, no 401, cuando el `refresh_token` ya no existe en servidor (`No query results for model [Laravel\Passport\RefreshToken]`). Se clasificaba como error de conexión → `ConfigEntryNotReady` → bucle de `setup_retry` sin botón de reautenticar; la única salida fue desinstalar y reinstalar. La clasificación pasa a ser **por rango** (`api._http_error`): `5xx`/`429` transitorios, cualquier otro no-2xx pide reauth. Enumerar códigos concretos fue justo lo que falló. Además los métodos de descubrimiento dejan de devolver `[]` ante cualquier error (una sesión muerta se leía como "cuenta vacía"), y el hilo MQTT y la tarea periódica piden reauth **en caliente** (`entry.async_start_reauth`) en vez de reintentar en silencio hasta el siguiente reinicio.
-- ✅ **Nombres de entidad adaptados a HA 2026** (`has_entity_name`): HA compone el `entity_id` como área + dispositivo + entidad, así que sin adaptarse una instalación nueva creaba `climate.dev_1_inst_a_salon`. El dispositivo toma ahora el nombre de la zona y cada entidad aporta solo su parte. **Las instalaciones existentes conservan sus `entity_id`** (el registro manda mientras el `unique_id` no cambie), con test dedicado. Esto revisa la decisión de alcance de la Tarea 23: no migrar dejó de ser gratis.
-- ✅ **Tests de `config_flow.py`/`__init__.py`** con harness real de HA (unique_id, reauth, `ConfigEntryAuthFailed`/`NotReady`, migración A6, unload) vía Docker (`docker compose run --rm test-ha`) — no requiere instalar nada en la máquina del desarrollador. Ver `docs/execution-plan.md` Tarea 12 y `docs/testing-strategy.md`.
-- ✅ **Tests de entidades y eventos MQTT** (climate/sensor/switch reaccionando a `mysair_update`, comandos, filtro por `ctl`) — `tests/test_entities.py`, ver `docs/execution-plan.md` Tarea 13.
-- ✅ **Sensor de humedad y disponibilidad real de heat/cool** (F1) + **min/max temp reales** (C8) — ver `docs/execution-plan.md` Tarea 15.
-- ✅ **Confirmación de comandos vía topic `feedback`** (E7, parte 1): suscripción, evento `mysair_feedback`, log de confirmación/timeout por entidad. **Sin revertir estado todavía** — pendiente de validar el payload real en producción (#23). Ver `docs/execution-plan.md` Tarea 16.
-- ✅ **`datetime.utcnow()` obsoleto** (C6, en la firma SigV4), **`FlowResult`→`ConfigFlowResult`** (C7), y **`should_poll=False` + `available` por frescura de MQTT** (C5, todas las entidades no disponibles hasta el primer status y de nuevo si no llega nada en 360 s). Ver `docs/execution-plan.md` Tarea 17.
-- ✅ **Velocidad de ventilador** (F2): `climate.fan_mode`/`fan_modes`, comando `fanspeed`. Mapeo de `vv` confirmado en el JS (#24 resuelto — cuidado, una página de demo/storybook del mismo bundle tenía datos de ejemplo que parecían una pista pero no lo eran). Ver `docs/execution-plan.md` Tarea 18.
-- ✅ **Dos bugs reales encontrados con una captura de producción** (2026-07-20, tras probar la Tarea 18): `mqtt_handler._on_message` clasificaba como `"unknown"` cualquier topic que no viniera envuelto en paréntesis — el topic de `feedback` llega sin ellos, así que la confirmación de comandos (Tarea 16) **nunca funcionó** pese a que el ACK sí llegaba. Y `status_parser` leía el campo de humedad como `hm` cuando el real es `hum` — el sensor de humedad (F1) **nunca mostró nada**. Ambos corregidos; #6 y #23 quedan resueltos de paso. Ver `docs/execution-plan.md` Tarea 19. **Hinweis:** Die Aussage zum Feuchtefeld ist überholt. `hm` trägt den Messwert, `hum` meldet `"0"`; siehe `docs/known-unknowns.md` #25 und `status_parser.parse_humidity`.
-- ✅ **Causa raíz de las desconexiones MQTT "sistemáticas"** (2026-07-20): nunca refrescábamos la sesión MQTT *antes* de que caducaran las credenciales AWS, solo al reconectar después de que AWS ya la hubiera cortado — de ahí el patrón regular. Corregido con refresco proactivo (`api.seconds_until_aws_credentials_expire` + timer en `mqtt_handler`), igual que hace la app oficial. Además, el aviso de "sin confirmación MQTT" ahora distingue si fue por desconexión o con MQTT activo. **Verificado en producción**: el usuario confirma que las caídas ya no ocurren. Ver `docs/execution-plan.md` Tarea 20.
-- ✅ **E7 completo:** si no llega confirmación de un comando a tiempo, se revierte el estado optimista (temperatura/modo/fan_mode/switch) al último valor conocido; se descarta el revert si llega un status real antes. Ver Tarea 21.
-- ✅ **E1 (parser MQTT conforme al estándar, `known-unknowns` #6):** investigando el "carácter fantasma" antes del topic en los logs se encontró que era el byte bajo del campo de longitud MQTT estándar (confirmado por coincidencia exacta de longitud entre dos capturas reales), no un envoltorio de la app. `mqtt_handler.parse_mqtt_publish` decodifica el frame conforme al estándar como método primario, con la heurística de texto anterior como fallback si no es concluyente. Ver Tarea 21.
-- ✅ **E3 (backoff con jitter):** `mqtt_handler.compute_backoff_delay` sustituye la espera fija de 10 s por un backoff exponencial (tope 120 s) con jitter ±20%; se resetea al reconectar con éxito. Los reconectes planificados (refresco de credenciales) siguen sin esperar. Ver Tarea 22.
-- ✅ **D1 (diagnostics.py):** volcado descargable desde la UI de HA con instalaciones, devices y estado del cliente MQTT, redactando tokens/credenciales AWS. Ver Tarea 22.
-- ✅ **F5 (servicio `mysair.stop_installation`):** detiene una instalación completa con un comando en vez de apagar zona por zona; registrado una vez por dominio y retirado al descargar la última entrada. Ver Tarea 22.
-- ✅ **C4 (traducciones):** `strings.json` (inglés, referencia/fallback) + `translations/es.json` para el config flow (pasos, errores, abort) y el servicio `mysair.stop_installation`. Alcance deliberado: no incluye nombres de entidad (`climate`/`sensor`/`switch` siguen hardcodeados en español) — migrarlos a `has_entity_name`/`translation_key` cambiaría el nombre visible de entidades ya instaladas, se descartó por el riesgo frente al valor. Ver Tarea 23.
-- ✅ **C1 (coordinador central de estado por zona):** `coordinator.py` nuevo — `MySairCoordinator`, una instancia por config entry, sustituye las 6 suscripciones directas al bus (una por entidad de zona: climate/sensor×4/switch) que repetían el mismo filtrado de topic/ctl/zone_id. Ahora un único suscriptor por entry filtra una vez y redistribuye cada zona por separado vía `homeassistant.helpers.dispatcher`. `mqtt_message_callback` y `command_feedback.py` no se tocan; sin cambio de comportamiento observable (versión `2.7.0`→`2.7.1`, `PATCH`). Ver Tarea 24.
-- ✅ **D2 (redacción de logs y niveles):** `api.py` trunca los cuerpos de respuesta HTTP de error antes de loguearlos (`_truncate`); `mqtt_handler.py` enmascara el `aws_access_key_id` embebido en el `client_id` MQTT (`_redact_client_id`). Logs de alta frecuencia (mensaje MQTT recibido, comandos/instrucciones enviados, confirmaciones de feedback, acciones de usuario) bajados de INFO a DEBUG; se mantienen en INFO los eventos de ciclo de vida. Ver Tarea 25.
-- ✅ **D3+D4 (sensor de conexión MQTT + métricas):** `MySairMqttStatusSensor` (`sensor.py`), una entidad por config entry (no por zona): estado online/offline (`mqtt_client.connected`) y, como atributos, última actualización recibida, intentos/total de reconexiones, y contadores de mensajes decodificados por el método estricto/heurístico/fallidos. Mismas métricas añadidas a `diagnostics.py`. Versión `2.7.1`→`2.8.0` (`MINOR`). Ver Tarea 25.
-- ✅ **E2 (frames parciales/multi-paquete):** `mqtt_handler.py` ya no asume 1 mensaje WS = 1 paquete MQTT completo. `self._recv_buffer` + `_next_packet_length` (distingue incompleto de malformado usando el campo de longitud MQTT) permiten reensamblar un paquete partido entre dos mensajes y despachar varios paquetes coalescidos en uno solo. El heurístico de texto de respaldo sigue intacto para tramas que no encajan en el framing estándar. Ver Tarea 26.
-- ✅ **E4 (validación de payloads):** `status_parser.py` rechaza (`None`) un payload que no es un dict, en vez de un dict "vacío" sin efecto aguas abajo; corrige un `TypeError` real sin capturar (`t` no-lista); loguea (antes en silencio) `ctl` ausente y zonas sin `rf`. Sin librería nueva (`voluptuous` no está en el entorno P0/P1); permisivo ante claves adicionales desconocidas. Ver Tarea 26.
-- ✅ **E6 (evaluar paho-mqtt):** decisión documentada de **no migrar** — no soporta de forma nativa una URL WSS firmada con SigV4 que hay que re-firmar antes de cada reconexión; el ahorro real de código no compensa el riesgo de re-validar en producción el comportamiento de reconexión ya depurado (Tareas 8/20). Ver Tarea 26 y `docs/development-roadmap.md`.
-- ✅ **F3 (modo auto):** confirmado que el protocolo no tiene ningún modo de cambio automático calor/frío (`m` 0-5 cubre exactamente las 6 combinaciones AC/suelo × calor/frío, sin hueco extra). `const.HVAC_MODES` (con `"auto"`) no tenía consumidores; eliminado. Ver Tarea 27.
-- ✅ **F4 (control de suelo radiante, repurpose):** el `select.py` original (eliminado en A3) era un toggle roto de calor/frío ya duplicado por `climate.hvac_mode`. En su lugar, nueva entidad `MySairFloorSwitch` (`switch.py`) que controla el suelo radiante reutilizando el comando `mode` existente (recalcula `m` con `compute_mode_value`, sin comando nuevo) — hueco genuino que no cubría ninguna entidad hasta ahora. Ver Tarea 27.
-- ✅ **Atributo `medio` (AC/suelo/mixto):** `sensor.<zona>_modo` (`MySairModeSensor`) gana un atributo `medio` que resume en un solo valor si la zona usa AC, suelo o ambos, sin tener que cruzar `climate.<zona>` con `switch.<zona>_suelo` manualmente. Se conserva aunque la zona esté apagada (`m` no depende de `e`). Ver Tarea 28.
-- ✅ **`ruff` en CI + tests de reload/multi-instalación/topología:** job independiente de lint/formato en CI (reglas por defecto); 3 tests P3 nuevos sin necesitar captura real. Ver Tarea 30.
-- ✅ **Limpieza de entidades huérfanas tras un cambio de topología:** `_cleanup_stale_zone_devices` (`__init__.py`) borra el dispositivo (y todas sus entidades) de una zona que ya no aparece en `get_devices()`, comparando contra el `device_registry` en cada setup/reload — antes se quedaban huérfanas para siempre. Ver Tarea 31.
+Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.md`. Für Änderungen am Code sind vor allem diese Erkenntnisse wichtig:
 
-Pendientes:
-- 🟡 **Mensajes duplicados/fuera de orden** — sin cobertura todavía (menor, ver `docs/testing-strategy.md` §P3; los duplicados de `feedback` vistos en producción encajan aquí).
-- 🟡 **Campos de zona sin interpretar** (`vf`, `hmh`, `mh`, `p`, `ps`): búsqueda exhaustiva en el bundle JS sin encontrar referencias — quedan sin interpretar por la regla de no inventar campos (ver `docs/known-unknowns.md`). (`sv` se resolvió el 2026-07-21: es el estado de suelo radiante encendido/apagado, `setFloor` en el bundle — un intento de búsqueda anterior no lo había encontrado, no es que el campo no exista.)
+- **Fehlerklassifizierung nach Bereich** (`api._http_error`): Das Backend (Laravel Passport) antwortet auf ein gelöschtes `refresh_token` mit **404**, nicht 401. `5xx`/`429` gelten als vorübergehend, jeder andere Code außerhalb von 2xx führt zur erneuten Anmeldung. Keine Listen einzelner Codes einführen. Erkennungsmethoden geben Fehler weiter statt `[]`; MQTT-Thread und periodische Abfrage fordern die erneute Anmeldung im laufenden Betrieb an (`entry.async_start_reauth`).
+- **Topic ohne Klammern:** Das scheinbare `(` vor manchen Topics ist das niederwertige Byte des MQTT-Längenfelds. Kein Parser darf Klammern voraussetzen (`known-unknowns.md` #6).
+- **Luftfeuchte:** `hm` trägt den Messwert, `hum` meldet `"0"`; `hm` hat Vorrang, 0 gilt als unbekannt (`known-unknowns.md` #25, `status_parser.parse_humidity`).
+- **Vorausschauende Erneuerung der AWS-Zugangsdaten** vor `aws_expires_at`; ohne sie trennt AWS IoT die Verbindung regelmäßig.
+- **Eindeutige MQTT-`client_id` je Verbindung**, sonst verdrängen sich Integration und offizielle App gegenseitig.
+- **Entity-IDs:** Mit `has_entity_name` bildet HA die IDs aus Gerät (= Zonenname) und Entitätsname in der eingestellten Sprache. Bestehende Installationen behalten ihre IDs, solange die `unique_id` gleich bleibt (dafür gibt es einen Test). `unique_id`s nie ändern.
+- **Verwaiste Zonen** werden bei jedem Setup/Reload entfernt (`_cleanup_stale_zone_devices`); das Kontogerät (Kennung `entry_id`) bleibt unangetastet.
 
-Decisiones de alcance (no son bugs):
-- **Solo primera `Location`** (#15) — soportar varias `Location` queda deliberadamente fuera de alcance.
-- **Temporizador/programas** (F6, `known-unknowns.md` #27) — descartado: la forma del payload de escritura nunca se decodificó en el bundle (ni existe un `setPrograms`), implementarlo exigiría inventar campos. No se retoma salvo una captura real de producción.
-- **PR legacy a `home-assistant/brands`** — descartado: los usuarios en HA <2026.3.0 no verán el icono/logo hasta que actualicen; se acepta ese hueco en vez de mantener una contribución externa duplicada (el mecanismo local ya cubre HA ≥2026.3.0, ver Tarea 29).
+Offen:
+- 🔴 **Erfolgsprüfung von `/send/instruction`** erwartet `msg == "Creado"`; englischsprachige Konten erhalten `"Created"` (`docs/mysair-http-api.md` §3.1).
+- 🟠 **Widersprüchliche Heiz-/Kühlrichtung** zwischen Zonen wird nicht verhindert.
+- 🟡 **Fehler bei Befehlen** erscheinen nur im Log, nicht in der Oberfläche.
+- 🟡 **Verweise im Manifest** zeigen noch auf das Ursprungs-Repository.
+- 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
+- 🟡 **Uninterpretierte Zonenfelder** `vf`, `hmh`, `mh`, `p`, `ps` (`docs/known-unknowns.md`).
+
+Abgrenzungen (keine Fehler):
+- **Nur der erste Standort** (`known-unknowns.md` #15).
+- **Keine Timer/Programme** (F6, `known-unknowns.md` #27): Das Format zum Setzen ist nicht entschlüsselt; nur mit einem echten Mitschnitt wieder aufgreifen.
+- **Kein zusätzlicher PR an `home-assistant/brands`**: Nutzer von HA vor 2026.3.0 sehen Symbol und Logo erst nach einem Update.

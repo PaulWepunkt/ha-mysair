@@ -1,12 +1,12 @@
-# Changelog
+# Änderungsprotokoll
 
-Todos los cambios notables de este proyecto se documentan en este fichero.
+Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
-El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/): `MAJOR.MINOR.PATCH`, donde `MAJOR` indica cambios incompatibles (p. ej. ruta de instalación, esquema de la config entry o comportamiento observable), `MINOR` añade funcionalidad compatible hacia atrás, y `PATCH` corrige bugs sin cambiar comportamiento esperado.
+Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), und das Projekt verwendet [Semantic Versioning](https://semver.org/lang/de/): `MAJOR.MINOR.PATCH`. `MAJOR` steht für inkompatible Änderungen (z. B. Installationspfad, Schema der Config Entry oder beobachtbares Verhalten), `MINOR` für rückwärtskompatible neue Funktionen und `PATCH` für Fehlerkorrekturen ohne Änderung des erwarteten Verhaltens.
+
+Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository und wurden nachträglich aus dem Spanischen übersetzt. Zitierte Entitätsnamen geben den damaligen Stand wieder.
 
 ## [Unreleased]
-
-> Ab dieser Version werden Änderungen auf Deutsch dokumentiert.
 
 ### Added
 - **Bedienoberfläche auf Deutsch, Englisch und Spanisch.** Entitätsnamen, Zustände und Symbole kommen jetzt aus den Übersetzungs- und Symboldateien von Home Assistant (`translations/*.json`, `icons.json`) statt aus festen spanischen Texten. Angezeigt wird die in Home Assistant eingestellte Sprache. Neu: `translations/de.json` für Entitäten, Einrichtungsdialog und den Dienst „Anlage stoppen“.
@@ -20,207 +20,207 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - Bestehende Entity-IDs bleiben erhalten. Bei einer Neueinrichtung erzeugt Home Assistant die IDs aus den Namen in der eingestellten Sprache (z. B. `sensor.<zone>_luftfeuchtigkeit`).
 - Code-Kommentare, Docstrings und Log-Meldungen auf Englisch statt Spanisch; Log-Meldungen ohne Emojis. Keine Änderung am Verhalten.
 - Ersatzname einer Zone ohne Namen im Konto einheitlich „Zone <Referenz>“ (bisher je nach Plattform „Zona …“ oder „Termostato …“).
+- **Luftfeuchte 0 wird als „unbekannt“ gemeldet statt als 0 %.** Eine echte Raumluftfeuchte von 0 % gibt es nicht; eine 0 bedeutet, dass das Thermostat keinen Feuchtesensor hat oder noch nicht gemessen hat. So landen keine falschen Nullen in der Langzeitstatistik und lösen keine feuchtebasierten Automationen aus.
+- **Dokumentation auf Deutsch.** README, `CLAUDE.md`, `CHANGELOG.md` und alle Dokumente in `docs/` sind übersetzt und auf den aktuellen Stand gebracht. Die README nennt dieses Repository als Installationsquelle für HACS, beschreibt die aktuellen Entitäten und verweist auf das Ursprungs-Repository. `docs/execution-plan.md` ist eine Zusammenfassung; das frühere Arbeitsprotokoll liegt in der Git-Historie.
 
 ### Fixed
 - **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).
 
-### Changed
-- **Luftfeuchte 0 wird als „unbekannt“ gemeldet statt als 0 %.** Eine echte Raumluftfeuchte von 0 % gibt es nicht; eine 0 bedeutet, dass das Thermostat keinen Feuchtesensor hat oder noch nicht gemessen hat. So landen keine falschen Nullen in der Langzeitstatistik oder lösen feuchtebasierte Automationen aus.
-
 ## [2.13.1] - 2026-09-12
 
 ### Fixed
-- **El asistente de configuración estaba sin traducir en inglés.** Home Assistant no lee `strings.json` en tiempo de ejecución para integraciones custom: solo carga `translations/<idioma>.json`. Había `es.json` pero no `en.json`, así que cualquiera con HA en inglés (el idioma por defecto) veía claves crudas como `invalid_auth` en el login, en la reautenticación y en el servicio `mysair.stop_installation`.
-- `climate.turn_on` en una zona que solo enfría no hacía nada: elegía siempre calor sin mirar las capacidades de la zona, y el propio guard de la entidad lo rechazaba en silencio. Ahora prefiere calor pero cae al primer modo que la zona admita.
+- **Der Einrichtungsdialog war auf Englisch nicht übersetzt.** Home Assistant liest `strings.json` bei Custom-Integrationen zur Laufzeit nicht, sondern lädt nur `translations/<sprache>.json`. Es gab `es.json`, aber kein `en.json`. Wer HA auf Englisch (Standardsprache) nutzte, sah daher rohe Schlüssel wie `invalid_auth` bei der Anmeldung, bei der erneuten Anmeldung und im Dienst `mysair.stop_installation`.
+- `climate.turn_on` bewirkte in einer Zone, die nur kühlen kann, nichts: Es wählte immer Heizen, ohne die Fähigkeiten der Zone zu beachten, und die Prüfung der Entität verwarf das stillschweigend. Jetzt wird Heizen bevorzugt, sonst der erste Modus, den die Zone unterstützt.
 
 ### Changed
-- `PERCENTAGE` pasa a `UnitOfRatio.PERCENTAGE` en el sensor de humedad, desaconsejado como unidad desde HA 2026.7. Mismo valor, sin cambio de comportamiento.
-- CI: nuevo job de validación de HACS, que antes solo cubría `hassfest`.
+- `PERCENTAGE` wird im Feuchtesensor durch `UnitOfRatio.PERCENTAGE` ersetzt; die alte Einheit ist seit HA 2026.7 abgekündigt. Gleicher Wert, kein geändertes Verhalten.
+- CI: neuer Job zur HACS-Prüfung; bisher prüfte nur `hassfest`.
 
 ## [2.13.0] - 2026-09-12
 
 ### Changed
-- **Nombres de entidad y dispositivo, adaptados al esquema de Home Assistant 2026.** HA compone ahora el `entity_id` como área + dispositivo + entidad. Sin adaptarse, una instalación nueva habría creado `climate.dev_1_inst_a_salon` en vez de `climate.salon`. Las entidades pasan a usar `has_entity_name`: el dispositivo toma el nombre de la zona ("Salón" en vez de "DEV_1 (INST_A)") y cada entidad aporta solo su parte ("Temperatura actual", "Humedad", "Encendido", "Suelo radiante").
-  - **Quien ya tenga la integración instalada no pierde nada**: el registro de entidades conserva los `entity_id` existentes mientras el `unique_id` no cambie, así que automatizaciones y paneles siguen funcionando. Hay un test que lo garantiza.
-  - En **instalaciones nuevas**, los dos switches cambian de nombre respecto al esquema anterior: `switch.<zona>` pasa a `switch.<zona>_encendido` y `switch.<zona>_suelo` a `switch.<zona>_suelo_radiante`. El resto de entidades mantiene el mismo identificador de siempre.
-  - El dispositivo de cuenta pasa a llamarse "MySair" en vez de "MySair (cuenta)", y su sensor "Conexión MQTT".
-- Requisito mínimo de Home Assistant: **2026.8.0** (antes 2025.10.0), alineado con la versión contra la que se prueba.
-- El harness de test sube de Home Assistant 2025.1.4 a 2026.9 (y con él Python 3.12 → 3.14). Se había quedado 20 versiones por detrás de lo que se ejecuta en producción, así que las deprecaciones pasaban desapercibidas.
+- **Entitäts- und Gerätenamen an das Schema von Home Assistant 2026 angepasst.** HA bildet die `entity_id` jetzt aus Bereich + Gerät + Entität. Ohne Anpassung hätte eine Neuinstallation `climate.dev_1_inst_a_salon` statt `climate.salon` angelegt. Die Entitäten nutzen jetzt `has_entity_name`: Das Gerät trägt den Zonennamen („Salón“ statt „DEV_1 (INST_A)“), und jede Entität steuert nur ihren eigenen Teil bei („Temperatura actual“, „Humedad“, „Encendido“, „Suelo radiante“).
+  - **Bestehende Installationen verlieren nichts:** Das Entitätsregister behält vorhandene `entity_id`s, solange die `unique_id` gleich bleibt; Automationen und Dashboards funktionieren weiter. Ein Test stellt das sicher.
+  - Bei **Neuinstallationen** ändern sich die Namen der beiden Schalter gegenüber dem bisherigen Schema: `switch.<zona>` wird zu `switch.<zona>_encendido` und `switch.<zona>_suelo` zu `switch.<zona>_suelo_radiante`. Alle anderen Entitäten behalten ihre bisherige Kennung.
+  - Das Kontogerät heißt jetzt „MySair“ statt „MySair (cuenta)“, sein Sensor „Conexión MQTT“.
+- Mindestversion von Home Assistant: **2026.8.0** (bisher 2025.10.0), passend zur getesteten Version.
+- Die Testumgebung steigt von Home Assistant 2025.1.4 auf 2026.9 (und damit Python 3.12 → 3.14). Sie lag 20 Versionen hinter der produktiv genutzten Version, sodass Abkündigungen unbemerkt blieben.
 
 ### Fixed
-- Limpieza de dispositivos huérfanos: se sustituye `async_update_device(remove_config_entry_id=...)`, deprecado desde HA 2026.8 (un dispositivo pertenece ya a una sola config entry) y con eliminación prevista en 2027.8, por `async_remove_device`. Escribía un aviso de deprecación en el log en cada arranque.
+- Entfernen verwaister Geräte: `async_update_device(remove_config_entry_id=...)` ist seit HA 2026.8 abgekündigt (ein Gerät gehört nur noch zu einer Config Entry) und soll mit 2027.8 entfallen; ersetzt durch `async_remove_device`. Bisher stand bei jedem Start eine Abkündigungswarnung im Log.
 
 ### Removed
-- El bloque `device_info`, duplicado palabra por palabra en las 7 entidades de cada zona, se unifica en `device.py`.
+- Der Block `device_info`, der in allen sieben Entitäten einer Zone wortgleich wiederholt wurde, ist in `device.py` zusammengefasst.
 
 ## [2.12.0] - 2026-09-12
 
 ### Fixed
-- **Una sesión caducada ya no obliga a desinstalar la integración.** MySair corre sobre Laravel Passport, que responde `404` (no `401`) cuando el `refresh_token` ya no existe en servidor, con el cuerpo `No query results for model [Laravel\Passport\RefreshToken]`. Ese 404 se clasificaba como error de conexión, se convertía en `ConfigEntryNotReady` y Home Assistant reintentaba el arranque en bucle (`setup_retry`) sin ofrecer nunca el botón de reautenticar. Ahora la clasificación es por rango: `5xx` y `429` son fallos transitorios (reintentar), y cualquier otro código no-2xx en un endpoint de sesión pide reautenticación.
-- `get_locations()`, `get_installations()` y `get_devices()` dejan de devolver `[]` ante cualquier error. Una sesión muerta se leía como "cuenta vacía" y acababa también en un bucle de reintentos; una lista vacía ya solo significa que la cuenta no tiene datos.
-- `refresh_aws_credentials()` reintenta una vez tras renovar la sesión ante un `401`, como ya hacía `send_instruction()`. Antes dependía de que la tarea periódica refrescara el token por su cuenta.
+- **Eine abgelaufene Sitzung erzwingt keine Neuinstallation mehr.** MySair läuft auf Laravel Passport, das mit `404` (nicht `401`) antwortet, wenn das `refresh_token` auf dem Server nicht mehr existiert, und dazu den Text `No query results for model [Laravel\Passport\RefreshToken]` liefert. Dieser 404 wurde als Verbindungsfehler eingestuft, führte zu `ConfigEntryNotReady`, und Home Assistant versuchte den Start in einer Schleife (`setup_retry`), ohne je die erneute Anmeldung anzubieten. Jetzt wird nach Bereich eingestuft: `5xx` und `429` sind vorübergehende Fehler (erneut versuchen), jeder andere Code außerhalb von 2xx an einem Sitzungsendpunkt verlangt eine erneute Anmeldung.
+- `get_locations()`, `get_installations()` und `get_devices()` liefern bei Fehlern nicht mehr `[]`. Eine abgelaufene Sitzung sah wie ein „leeres Konto“ aus und endete ebenfalls in einer Wiederholungsschleife; eine leere Liste bedeutet jetzt nur noch, dass das Konto keine Daten hat.
+- `refresh_aws_credentials()` wiederholt bei einem `401` einmal nach Erneuerung der Sitzung, wie es `send_instruction()` bereits tat. Bisher war es darauf angewiesen, dass die periodische Abfrage das Token zufällig erneuerte.
 
 ### Added
-- **Reautenticación en caliente.** Si la sesión muere con la integración ya arrancada (cierre de sesión desde la app oficial, cambio de contraseña, limpieza de tokens en servidor), el hilo MQTT y la tarea periódica de estado piden el flujo de reauth al momento en vez de reintentar en silencio hasta el siguiente reinicio de Home Assistant. El hilo MQTT sigue reintentando en degradado y avisa una sola vez; al reconectar con éxito rearma el aviso.
-- El flujo de reauth comprueba que la cuenta no cambia (`account_mismatch`), con su cadena traducida al inglés y al español.
+- **Erneute Anmeldung im laufenden Betrieb.** Stirbt die Sitzung bei laufender Integration (Abmeldung in der offiziellen App, Passwortänderung, Aufräumen von Token auf dem Server), fordern MQTT-Thread und periodische Zustandsabfrage sofort die erneute Anmeldung an, statt bis zum nächsten Neustart von Home Assistant still weiter zu versuchen. Der MQTT-Thread versucht es eingeschränkt weiter und meldet das nur einmal; nach einer erfolgreichen Verbindung wird die Meldung wieder scharf geschaltet.
+- Die erneute Anmeldung prüft, dass das Konto gleich bleibt (`account_mismatch`), mit Übersetzung ins Englische und Spanische.
+
 ## [2.11.2] - 2026-07-21
 
 ### Added
-- Limpieza automática de entidades huérfanas: si una zona desaparece de la cuenta MySair entre un arranque/recarga y otro, su dispositivo y todas sus entidades (termostato, sensores, switches) se eliminan del registro de Home Assistant en vez de quedarse huérfanos para siempre.
+- Automatisches Entfernen verwaister Entitäten: Verschwindet eine Zone zwischen zwei Starts bzw. Neuladevorgängen aus dem MySair-Konto, werden ihr Gerät und alle ihre Entitäten (Thermostat, Sensoren, Schalter) aus dem Register von Home Assistant entfernt, statt dauerhaft verwaist zu bleiben.
 
 ## [2.11.1] - 2026-07-21
 
 ### Added
-- `ruff` (lint + formato) configurado y añadido a CI como un 4º job independiente (`pyproject.toml`, `requirements-lint.txt`).
-- 3 tests nuevos sin necesitar una captura real de producción: reload de la config entry (sin duplicar entidades ni el servicio compartido), varias instalaciones en una misma cuenta, y cambio de topología (documenta que una zona eliminada queda huérfana en el registro de entidades, sin limpieza automática).
+- `ruff` (Lint + Formatierung) eingerichtet und als vierter, unabhängiger Job in die CI aufgenommen (`pyproject.toml`, `requirements-lint.txt`).
+- Drei neue Tests, die keinen echten Mitschnitt brauchen: Neuladen der Config Entry (ohne doppelte Entitäten oder doppelten gemeinsamen Dienst), mehrere Installationen in einem Konto und Änderung des Aufbaus (hält fest, dass eine entfernte Zone verwaist im Entitätsregister bleibt, ohne automatisches Aufräumen).
 
 ### Fixed
-- Eliminados 3 imports y 1 variable local sin usar (`api.py`, `config_flow.py`, `mqtt_handler.py`), sin cambio de comportamiento.
+- Drei ungenutzte Imports und eine ungenutzte lokale Variable entfernt (`api.py`, `config_flow.py`, `mqtt_handler.py`), ohne Änderung am Verhalten.
 
 ## [2.11.0] - 2026-07-21
 
 ### Added
-- Icono y logo de marca (`custom_components/mysair/brand/`), usando el mecanismo local de Home Assistant ≥2026.3.0 (sin PR externo a `home-assistant/brands`). Se muestran automáticamente en la UI de HA para quien tenga esa versión o superior.
-- `manifest.json` vuelve a declarar `quality_scale: "silver"` — pendiente de confirmar si `hassfest` lo acepta para una integración custom.
+- Symbol und Logo (`custom_components/mysair/brand/`) über den lokalen Mechanismus von Home Assistant ≥ 2026.3.0 (ohne externen PR an `home-assistant/brands`). Ab dieser HA-Version erscheinen sie automatisch in der Oberfläche.
+- `manifest.json` deklariert wieder `quality_scale: "silver"` – zu diesem Zeitpunkt war noch offen, ob `hassfest` das für eine Custom-Integration akzeptiert.
 
 ## [2.10.2] - 2026-07-21
 
 ### Added
-- Nuevo atributo `medio` en `sensor.<zona>_modo`: indica si la zona está usando aire acondicionado (`ac`), suelo radiante (`suelo`) o ambos combinados (`mixto`), en un solo valor en vez de tener que combinar `climate.<zona>` y `switch.<zona>_suelo` manualmente. Se conserva aunque la zona esté apagada.
+- Neues Attribut `medio` an `sensor.<zona>_modo`: zeigt in einem Wert, ob die Zone Klimaanlage (`ac`), Fußbodenheizung (`suelo`) oder beides (`mixto`) nutzt, statt `climate.<zona>` und `switch.<zona>_suelo` von Hand kombinieren zu müssen. Bleibt bei ausgeschalteter Zone erhalten.
 
 ## [2.10.1] - 2026-07-21
 
 ### Changed
-- El `model` del dispositivo (mostrado en la página de dispositivo de Home Assistant) pasa de `"Zonificador de aire"` a `"Zonificador de climatización"` en climate/sensor/switch, para reflejar que también controla suelo radiante, no solo aire acondicionado. Cambio cosmético, sin efecto en `unique_id` ni en el emparejamiento de entidades.
+- Das `model` des Geräts (auf der Geräteseite in Home Assistant) ändert sich von „Zonificador de aire“ zu „Zonificador de climatización“, weil auch Fußbodenheizung gesteuert wird und nicht nur Klimaanlage. Rein kosmetisch, ohne Auswirkung auf `unique_id` oder die Zuordnung der Entitäten.
 
 ## [2.10.0] - 2026-07-21
 
 ### Added
-- Control de suelo radiante por zona: nuevo switch (uno por zona con esa capacidad) para encender/apagar el suelo, independiente del switch de encendido general. Reutiliza el comando `mode` ya existente (recalcula el valor internamente preservando el modo calor/frío y el estado de AC actuales) — no requiere ningún comando nuevo del backend. La entidad aparece como "no disponible" en zonas sin capacidad de suelo.
+- Steuerung der Fußbodenheizung je Zone: neuer Schalter (einer je Zone mit dieser Fähigkeit), unabhängig vom allgemeinen Ein/Aus-Schalter. Nutzt den vorhandenen Befehl `mode` (berechnet den Wert intern neu und behält Heizen/Kühlen und den Zustand der Klimaanlage bei) – kein neuer Backend-Befehl nötig. In Zonen ohne Fußbodenheizung ist die Entität „nicht verfügbar“.
 
 ### Removed
-- `const.HVAC_MODES` (incluía un modo `"auto"` sin ningún soporte real en el sistema ni consumidor en el código — código muerto).
+- `const.HVAC_MODES` (enthielt einen Modus `"auto"` ohne echte Unterstützung im System und ohne Nutzer im Code – toter Code).
 
-### Evaluado (sin cambios de código)
-- Temporizador y programas por horario: no se implementan. El backend no expone ninguna forma confirmada de fijarlos (solo de leerlos), y adivinar el formato no es una opción responsable. Se retomará si en el futuro aparece evidencia real (p. ej. una captura de una instalación con temporizador configurado).
+### Geprüft (ohne Codeänderung)
+- Timer und Zeitprogramme werden nicht umgesetzt. Das Backend bietet keinen bestätigten Weg, sie zu setzen (nur zu lesen), und das Format zu raten, wäre nicht verantwortbar. Wird wieder aufgegriffen, falls echte Belege auftauchen (z. B. ein Mitschnitt einer Anlage mit eingerichtetem Timer).
 
 ## [2.9.0] - 2026-07-21
 
 ### Added
-- Reensamblado de frames MQTT (E2): el cliente ya no asume que cada mensaje WebSocket contiene exactamente un paquete MQTT completo. Ahora acumula los bytes recibidos y despacha tantos paquetes completos como haya (varios PUBLISH/CONNACK/SUBACK coalescidos en un mismo mensaje WS), y reensambla correctamente un paquete partido entre dos mensajes WS. Un cap defensivo descarta el buffer si crece sin completar un paquete o si una longitud declarada es absurda.
-- Validación de payloads (E4): `status_parser.py` rechaza explícitamente (y loguea) un payload que no es ni siquiera un dict, en vez de producir un evento vacío sin sentido; se loguean (antes en silencio) los casos de `ctl` ausente, campo `t` con forma inesperada, y zonas sin identificador (`rf`). Deliberadamente no se rechazan claves adicionales desconocidas del payload (permisivo ante campos nuevos del backend).
-- E6 (evaluar migrar a `paho-mqtt`): documentada la decisión de no migrar — ver `docs/development-roadmap.md`.
+- Zusammensetzen von MQTT-Frames (E2): Der Client geht nicht mehr davon aus, dass jede WebSocket-Nachricht genau ein vollständiges MQTT-Paket enthält. Er sammelt die empfangenen Bytes, verarbeitet so viele vollständige Pakete wie vorhanden (mehrere PUBLISH/CONNACK/SUBACK in einer WS-Nachricht) und setzt ein über zwei WS-Nachrichten verteiltes Paket korrekt zusammen. Eine Obergrenze verwirft den Puffer, wenn er ohne vollständiges Paket wächst oder eine unplausible Länge angegeben ist.
+- Prüfung der Nutzdaten (E4): `status_parser.py` weist eine Nachricht, die nicht einmal ein Objekt ist, ausdrücklich zurück (mit Log), statt ein sinnloses leeres Ereignis zu erzeugen; fehlendes `ctl`, ein unerwartet geformtes Feld `t` und Zonen ohne Kennung (`rf`) werden jetzt geloggt (bisher still). Unbekannte zusätzliche Felder werden bewusst toleriert.
+- E6 (Umstieg auf `paho-mqtt` prüfen): Entscheidung gegen den Umstieg dokumentiert – siehe `docs/development-roadmap.md`.
 
 ### Fixed
-- Un campo `t` (zonas) con una forma inesperada que no fuera una lista (p. ej. un número) provocaba un `TypeError` sin capturar que descartaba el mensaje MQTT entero con un error genérico; ahora se degrada de forma segura con un aviso específico en logs.
+- Ein Feld `t` (Zonen) mit unerwarteter Form, das keine Liste war (z. B. eine Zahl), löste einen nicht abgefangenen `TypeError` aus und verwarf die gesamte MQTT-Nachricht mit einer allgemeinen Fehlermeldung; jetzt wird es sicher übergangen und gezielt geloggt.
 
 ## [2.8.0] - 2026-07-21
 
 ### Added
-- Sensor `MySair Conexión MQTT` (uno por cuenta configurada): estado online/offline de la conexión MQTT, hora de la última actualización recibida, y métricas de reconexión/parseo (intentos de reconexión, reconexiones totales, mensajes decodificados por el método estricto/heurístico, mensajes que no se pudieron parsear, código del último cierre de conexión) (D3/D4).
-- `diagnostics.py` incluye ahora las mismas métricas de conexión/parseo.
+- Sensor „MySair Conexión MQTT“ (einer je eingerichtetem Konto): Zustand der MQTT-Verbindung (online/offline), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Auswertung (Wiederverbindungsversuche, Wiederverbindungen insgesamt, nach strenger bzw. heuristischer Methode dekodierte Nachrichten, nicht auswertbare Nachrichten, Code des letzten Verbindungsabbaus) (D3/D4).
+- `diagnostics.py` enthält dieselben Kennzahlen.
 
 ### Changed
-- Redacción de logs (D2): los cuerpos de respuesta HTTP de error se truncan antes de loguearse (evita que un cuerpo inesperado del backend filtre más de lo necesario), y el `clientId` MQTT enmascara el `access_key` de AWS que lleva embebido. Varios logs de alta frecuencia (un mensaje MQTT recibido, un comando enviado, una confirmación de comando) bajan de `INFO` a `DEBUG`; se mantienen en `INFO` los eventos de ciclo de vida (login, conexión/desconexión MQTT, arranque).
+- Schwärzen in Logs (D2): Fehlertexte von HTTP-Antworten werden vor dem Loggen gekürzt (damit ein unerwarteter Text des Backends nicht mehr preisgibt als nötig), und die MQTT-`clientId` maskiert den eingebetteten AWS-`access_key`. Mehrere häufige Logs (empfangene MQTT-Nachricht, gesendeter Befehl, Befehlsbestätigung) gehen von `INFO` auf `DEBUG`; Lebenszyklus-Ereignisse (Anmeldung, MQTT-Verbindung/-Trennung, Start) bleiben auf `INFO`.
 
 ## [2.7.1] - 2026-07-21
 
 ### Changed
-- Refactor interno: un único `MySairCoordinator` por config entry ahora escucha `mysair_update` una sola vez y redistribuye cada zona por separado (`homeassistant.helpers.dispatcher`) a la entidad correspondiente, en vez de que las 6 entidades por zona (climate/sensor/switch) repitan cada una el mismo filtrado de topic/instalación/zona sobre el bus. Sin cambio de comportamiento observable.
+- Interner Umbau: Ein einziger `MySairCoordinator` je Config Entry hört jetzt einmal auf `mysair_update` und verteilt jede Zone einzeln (`homeassistant.helpers.dispatcher`) an die passende Entität, statt dass die sechs Entitäten je Zone (climate/sensor/switch) dieselbe Filterung nach Topic/Installation/Zone auf dem Bus wiederholen. Keine beobachtbare Verhaltensänderung.
 
 ## [2.7.0] - 2026-07-20
 
 ### Added
-- Traducción del asistente de configuración (login, reautenticación, errores) y del servicio `mysair.stop_installation`: inglés por defecto (`strings.json`) y español (`translations/es.json`). Los nombres de las entidades (climate/sensor/switch) siguen en español, sin cambios.
+- Übersetzung des Einrichtungsdialogs (Anmeldung, erneute Anmeldung, Fehler) und des Dienstes `mysair.stop_installation`: Englisch als Standard (`strings.json`) und Spanisch (`translations/es.json`). Die Namen der Entitäten (climate/sensor/switch) blieben damals unverändert spanisch.
 
 ## [2.6.0] - 2026-07-20
 
 ### Added
-- Servicio `mysair.stop_installation`: detiene una instalación completa (todas sus zonas) con un solo comando, en vez de apagar zona por zona.
-- `diagnostics.py`: volcado descargable desde la UI de Home Assistant con el estado de la integración (instalaciones, dispositivos, estado del cliente MQTT) para depuración, redactando credenciales y tokens.
-- Backoff exponencial con jitter en la reconexión MQTT (antes una espera fija de 10 s); los reconectes planificados por refresco de credenciales siguen sin esperar.
+- Dienst `mysair.stop_installation`: stoppt eine ganze Installation (alle Zonen) mit einem einzigen Befehl, statt jede Zone einzeln auszuschalten.
+- `diagnostics.py`: herunterladbare Diagnose aus der Oberfläche von Home Assistant mit dem Zustand der Integration (Installationen, Geräte, Zustand des MQTT-Clients), mit geschwärzten Zugangsdaten und Token.
+- Exponentieller Backoff mit Jitter bei der MQTT-Wiederverbindung (bisher feste 10 s); geplante Wiederverbindungen zur Erneuerung der Zugangsdaten warten weiterhin nicht.
 
 ## [2.5.0] - 2026-07-20
 
 ### Added
-- Si un comando (temperatura, modo, ventilador, encendido/apagado) no se confirma por MQTT a tiempo, se revierte el estado optimista al último valor conocido en vez de quedarse mostrando algo que quizá no llegó a aplicarse.
-- Parser de frames MQTT conforme al estándar (topic decodificado desde la cabecera real en vez de heurísticas de texto), con la heurística anterior como respaldo si el frame no tiene la forma esperada.
+- Wird ein Befehl (Temperatur, Modus, Lüfter, Ein/Aus) nicht rechtzeitig per MQTT bestätigt, wird der optimistische Zustand auf den letzten bekannten Wert zurückgesetzt, statt etwas anzuzeigen, das womöglich nie angewendet wurde.
+- Standardkonformer Parser für MQTT-Frames (Topic aus dem echten Header statt aus Textheuristiken), mit der bisherigen Heuristik als Rückfall, falls ein Frame nicht die erwartete Form hat.
 
 ## [2.4.2] - 2026-07-20
 
 ### Fixed
-- Causa raíz de las desconexiones MQTT periódicas: la sesión nunca se refrescaba antes de que caducaran las credenciales AWS, así que AWS IoT cortaba la conexión activa cada vez que expiraban (patrón regular/"sistemático"). Ahora la conexión se refresca proactivamente antes de que eso ocurra, igual que hace la app oficial.
-- El aviso "Sin confirmación MQTT" ahora indica explícitamente si fue porque el MQTT estaba desconectado en ese momento o porque no llegó el ACK con la conexión activa.
+- Ursache der regelmäßigen MQTT-Abbrüche: Die Sitzung wurde nie vor dem Ablauf der AWS-Zugangsdaten erneuert, deshalb trennte AWS IoT die aktive Verbindung bei jedem Ablauf (regelmäßiges Muster). Jetzt wird die Verbindung vorher erneuert, wie es auch die offizielle App macht.
+- Der Hinweis „Keine MQTT-Bestätigung“ gibt jetzt an, ob MQTT in dem Moment getrennt war oder die Quittung trotz aktiver Verbindung ausblieb.
 
 ## [2.4.1] - 2026-07-20
 
 ### Fixed
-- La confirmación de comandos vía `feedback` (2.2.0) no funcionaba nunca: el topic se identificaba mal cuando el broker lo enviaba sin paréntesis alrededor (el caso real de `feedback`), así que la rama que procesa el ACK nunca se ejecutaba.
-- El sensor de humedad (2.1.0) no mostraba nunca ningún valor: el campo real en el status es `hum`, no `hm`.
+- Die Befehlsbestätigung über `feedback` (2.2.0) funktionierte nie: Das Topic wurde falsch erkannt, wenn der Broker es ohne umgebende Klammern sendete (der tatsächliche Fall bei `feedback`), sodass der Zweig für die Quittung nie ausgeführt wurde.
+- Der Feuchtesensor (2.1.0) zeigte nie einen Wert, weil das Feld `hm` gelesen wurde; umgestellt auf `hum`. (Diese Annahme erwies sich später als falsch, siehe [Unreleased].)
 
-Ambos encontrados con una captura de logs real de producción compartida por el usuario tras probar un cambio de temperatura.
+Beide Fehler wurden anhand echter Log-Ausgaben nach einer Temperaturänderung gefunden.
 
 ## [2.4.0] - 2026-07-20
 
 ### Added
-- Control de velocidad de ventilador en `climate` (`fan_mode`/`fan_modes`): manual 1/2/3 o automático, solo en las zonas que lo soportan.
+- Steuerung der Lüfterstufe in `climate` (`fan_mode`/`fan_modes`): manuell 1/2/3 oder Automatik, nur in Zonen, die das unterstützen.
 
 ## [2.3.0] - 2026-07-20
 
 ### Added
-- Todas las entidades pasan a "no disponible" si no reciben un status MQTT en más de 6 minutos (antes mostraban indefinidamente el último dato conocido, o valores por defecto antes del primer status).
-- `should_poll = False` explícito en todas las entidades (integración 100% push, sin polling de HA).
+- Alle Entitäten werden „nicht verfügbar“, wenn sie mehr als 6 Minuten keinen MQTT-Status erhalten (bisher zeigten sie unbegrenzt den letzten Wert oder vor dem ersten Status Standardwerte).
+- `should_poll = False` ausdrücklich in allen Entitäten (reines Push, keine Abfrage durch HA).
 
 ### Fixed
-- `datetime.utcnow()` (obsoleto) → `datetime.now(timezone.utc)` en la firma AWS SigV4.
-- `FlowResult` genérico → `ConfigFlowResult` en el config flow (tipo correcto para HA moderno).
+- `datetime.utcnow()` (abgekündigt) → `datetime.now(timezone.utc)` in der AWS-SigV4-Signatur.
+- Allgemeines `FlowResult` → `ConfigFlowResult` im Einrichtungsdialog (richtiger Typ für aktuelles HA).
 
 ## [2.2.0] - 2026-07-20
 
 ### Added
-- Confirmación de comandos vía el topic MQTT `.../usr/{aws_mqtt_user}/feedback`: cada comando enviado por `climate`/`switch` se correlaciona con su `orderId`, y se registra en el log si llega confirmación o si no llega en 5 s. No revierte el estado optimista todavía (pendiente de validar el payload real en producción).
+- Befehlsbestätigung über das MQTT-Topic `.../usr/{aws_mqtt_user}/feedback`: Jeder von `climate`/`switch` gesendete Befehl wird über seine `orderId` zugeordnet; im Log steht, ob eine Bestätigung kam oder nach 5 s ausblieb. Der optimistische Zustand wird noch nicht zurückgesetzt (die echte Form der Nachricht war noch zu prüfen).
 
 ## [2.1.0] - 2026-07-20
 
 ### Added
-- Sensor de humedad por zona (`sensor.<zona>_humedad`).
-- `climate.hvac_modes` refleja la disponibilidad real de calor/frío de cada zona (campos `c`/`f`) en vez de ofrecer siempre los tres modos.
-- `climate.min_temp`/`max_temp` se actualizan con los límites reales de la zona (`tmm`/`tmx`) en vez de usar 10/30 fijos.
-- Tests P2 con harness real de Home Assistant vía Docker (config flow, setup/unload, entidades) y CI en GitHub Actions (`pytest` + `hassfest`).
+- Feuchtesensor je Zone (`sensor.<zona>_humedad`).
+- `climate.hvac_modes` spiegelt die tatsächliche Verfügbarkeit von Heizen/Kühlen jeder Zone (Felder `c`/`f`), statt immer alle drei Modi anzubieten.
+- `climate.min_temp`/`max_temp` übernehmen die echten Grenzwerte der Zone (`tmm`/`tmx`) statt fester 10/30.
+- Tests mit echter Home-Assistant-Testumgebung über Docker (Einrichtungsdialog, Setup/Unload, Entitäten) und CI mit GitHub Actions (`pytest` + `hassfest`).
 
 ### Fixed
-- `manifest.json`: eliminada la clave `homeassistant` (no válida para integraciones custom) y claves reordenadas — detectado por `hassfest` en CI.
+- `manifest.json`: Schlüssel `homeassistant` entfernt (für Custom-Integrationen nicht zulässig) und Schlüssel sortiert – von `hassfest` in der CI gefunden.
 
 ## [2.0.0] - 2026-07-20
 
-### ⚠️ Incompatible con instalaciones previas (manual, no HACS)
+### ⚠️ Inkompatibel mit früheren Installationen (manuell, nicht HACS)
 
-- **Reestructuración a `custom_components/mysair/`**: el layout plano anterior (ficheros sueltos en la raíz de `custom_components/`) ya no funciona. Hay que borrar la instalación previa y copiar la nueva carpeta completa (ver README §Instalación).
-- **Corrección de la codificación de estado**: `e`=encendido/apagado/standby, `m`=modo por paridad (antes se leía `e` como si fuera el modo). Instalaciones existentes verán el modo/encendido reportado correctamente a partir de esta versión — puede diferir de lo que mostraban versiones anteriores. Ver `docs/protocol-findings.md`.
-- **La config entry ya no almacena `password` en claro**: en el primer arranque tras actualizar se elimina automáticamente de entradas existentes. Si el `refresh_token` guardado no es válido, Home Assistant pedirá reautenticación desde la UI.
+- **Umstellung auf `custom_components/mysair/`**: Das bisherige flache Layout (einzelne Dateien direkt in `custom_components/`) funktioniert nicht mehr. Die alte Installation löschen und den neuen Ordner vollständig kopieren (siehe README, Installation).
+- **Korrigierte Kodierung des Zustands**: `e` = Ein/Aus/Standby, `m` = Modus nach Parität (bisher wurde `e` als Modus gelesen). Bestehende Installationen zeigen Modus und Ein/Aus ab dieser Version korrekt an – das kann von der bisherigen Anzeige abweichen. Siehe `docs/protocol-findings.md`.
+- **Die Config Entry speichert kein Passwort im Klartext mehr**: Beim ersten Start nach dem Update wird es aus bestehenden Einträgen entfernt. Ist das gespeicherte `refresh_token` ungültig, fordert Home Assistant in der Oberfläche zur erneuten Anmeldung auf.
 
 ### Added
-- Flujo de **reauth** (`async_step_reauth`) y uso de `ConfigEntryAuthFailed`/`ConfigEntryNotReady` en el setup.
-- `unique_id` en la config entry: evita añadir la misma cuenta dos veces.
-- `client_id` MQTT único por conexión (evita expulsar la app oficial del móvil).
-- Refresco proactivo de credenciales AWS (`aws_expires_at`) y topic MQTT dinámico desde `aws_base_topic`.
-- Suite de tests P0/P1 sin dependencia de Home Assistant (parser de status, builders MQTT, firma SigV4, cliente HTTP): 78 tests.
-- Empaquetado para HACS (`hacs.json`), `LICENSE` (MIT) y README completo.
+- Erneute Anmeldung (`async_step_reauth`) und Verwendung von `ConfigEntryAuthFailed`/`ConfigEntryNotReady` im Setup.
+- `unique_id` der Config Entry: verhindert, dass dasselbe Konto zweimal hinzugefügt wird.
+- Eindeutige MQTT-`client_id` je Verbindung (verdrängt die offizielle App auf dem Smartphone nicht mehr).
+- Vorausschauende Erneuerung der AWS-Zugangsdaten (`aws_expires_at`) und dynamisches MQTT-Topic aus `aws_base_topic`.
+- Testsuite P0/P1 ohne Abhängigkeit von Home Assistant (Statusparser, MQTT-Builder, SigV4-Signatur, HTTP-Client).
+- Paket für HACS (`hacs.json`), `LICENSE` (MIT) und vollständige README.
 
 ### Changed
-- `async_unload_entry` movido a nivel de módulo, con cierre limpio de MQTT y cancelación de la tarea periódica de refresco (cada 120 s).
-- `switch.turn_on` ya no fuerza modo frío: enciende preservando el último modo conocido.
-- `requirements` reducidos a `requests` y `websocket-client` (se retiran `aiohttp`, `paho-mqtt`, `boto3`, no usados).
-- `login()`/`refresh_tokens()` lanzan excepciones tipadas (`MySairAuthError`/`MySairConnectionError`) en vez de una excepción genérica.
+- `async_unload_entry` auf Modulebene, mit sauberem Schließen von MQTT und Beenden der periodischen Abfrage (alle 120 s).
+- `switch.turn_on` erzwingt nicht mehr den Kühlmodus, sondern schaltet mit dem zuletzt bekannten Modus ein.
+- `requirements` auf `requests` und `websocket-client` reduziert (ungenutzte `aiohttp`, `paho-mqtt`, `boto3` entfernt).
+- `login()`/`refresh_tokens()` werfen typisierte Ausnahmen (`MySairAuthError`/`MySairConnectionError`) statt einer allgemeinen Ausnahme.
 
 ### Removed
-- `select.py` (código muerto, no cargado por la integración, con bugs).
-- `quality_scale: silver` del manifiesto: no estaba justificado por el estado real del proyecto (sin cobertura de tests con harness de HA, sin traducciones, sin icono de marca). Se retira hasta poder reclamar un nivel real.
+- `select.py` (toter Code, von der Integration nie geladen, fehlerhaft).
+- `quality_scale: silver` im Manifest: durch den damaligen Stand nicht gedeckt (keine Tests mit HA-Testumgebung, keine Übersetzungen, kein Markensymbol). Bis zu einem belegbaren Stand zurückgezogen.
 
 ### Security
-- El log de conexión MQTT ya no imprime la URL firmada de AWS (solo host y `client_id`).
-- `password` fuera de la config entry (ver arriba).
+- Das Log der MQTT-Verbindung gibt die signierte AWS-URL nicht mehr aus (nur Host und `client_id`).
+- Passwort nicht mehr in der Config Entry (siehe oben).
 
-## [1.0.0] - versión inicial
+## [1.0.0] – erste Version
 
-Primera versión funcional construida por el propietario del repositorio antes de este trabajo de estabilización: login, cliente MQTT y entidades `climate`/`sensor`/`switch` básicas, en layout plano (sin `custom_components/`).
+Erste funktionsfähige Version des ursprünglichen Autors vor der Stabilisierung: Anmeldung, MQTT-Client und einfache Entitäten `climate`/`sensor`/`switch` im flachen Layout (ohne `custom_components/`).
