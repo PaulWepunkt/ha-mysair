@@ -3,6 +3,7 @@ from datetime import timedelta
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import UnitOfTemperature, UnitOfRatio
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -52,10 +53,12 @@ class MySairMqttStatusSensor(SensorEntity):
     directamente el estado en vivo de MySairMQTTClient.
     """
 
-    _attr_icon = "mdi:wifi"
     _attr_should_poll = True
     _attr_has_entity_name = True
-    _attr_name = "Conexión MQTT"
+    _attr_translation_key = "cloud_connection"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["online", "offline"]
 
     def __init__(self, hass, entry_id, mqtt_client):
         self.hass = hass
@@ -92,13 +95,13 @@ class MySairTempSensor(AvailabilityMixin, SensorEntity):
 
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_icon = "mdi:thermometer"
+    # No name, no icon: HA derives both from the device class and
+    # translates the name ("Temperatur" / "Temperature" / "Temperatura").
 
     def __init__(self, hass, inst_ref, device_id, name):
         self.hass = hass
         self.inst_ref = inst_ref
         self.device_id = device_id
-        self._attr_name = "Temperatura actual"
         self._attr_unique_id = f"mysair_temp_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
@@ -130,7 +133,7 @@ class MySairTempSensor(AvailabilityMixin, SensorEntity):
         if new_val != self._state:
             self._state = new_val
             _LOGGER.debug(
-                f"[MySair Sensor] 🌡️ {self._zone_name} {self._attr_name}: {new_val}°C"
+                f"[MySair Sensor] 🌡️ {self._zone_name} temperature: {new_val}°C"
             )
         self.async_write_ha_state()
 
@@ -145,13 +148,12 @@ class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
 
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_icon = "mdi:thermostat"
+    _attr_translation_key = "target_temperature"
 
     def __init__(self, hass, inst_ref, device_id, name):
         self.hass = hass
         self.inst_ref = inst_ref
         self.device_id = device_id
-        self._attr_name = "Temperatura consigna"
         self._attr_unique_id = f"mysair_setpoint_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
@@ -183,7 +185,7 @@ class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
         if new_val != self._state:
             self._state = new_val
             _LOGGER.debug(
-                f"[MySair Sensor] 🎯 {self._zone_name} {self._attr_name}: {new_val}°C"
+                f"[MySair Sensor] 🎯 {self._zone_name} target temperature: {new_val}°C"
             )
         self.async_write_ha_state()
 
@@ -192,22 +194,27 @@ class MySairSetpointSensor(AvailabilityMixin, SensorEntity):
 # 🔄 SENSOR DE MODO HVAC
 # ==========================================================
 class MySairModeSensor(AvailabilityMixin, SensorEntity):
-    """Muestra el modo actual (OFF / HEAT / COOL) y, como atributo, el medio
-    activo (AC / suelo radiante / mixto — ver F4)."""
+    """Current zone mode and, as attribute ``medium``, the active medium.
+
+    States (translated by HA): ``off``, ``heat``, ``cool``, ``on`` (on, but
+    heat/cool unknown). Attribute ``medium``: ``air``, ``floor``,
+    ``air_and_floor`` (kept while the zone is off, since ``m`` does not
+    depend on ``e``).
+    """
 
     _attr_has_entity_name = True
-
-    _attr_icon = "mdi:repeat-variant"
+    _attr_translation_key = "mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["off", "heat", "cool", "on"]
 
     def __init__(self, hass, inst_ref, device_id, name):
         self.hass = hass
         self.inst_ref = inst_ref
         self.device_id = device_id
-        self._attr_name = "Modo"
         self._attr_unique_id = f"mysair_mode_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
-        self._state = "OFF"
+        self._state = "off"
         self._medium = None
         self._unsub = None
         self._init_availability()
@@ -218,7 +225,7 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        return {"medio": self._medium}
+        return {"medium": self._medium}
 
     async def async_added_to_hass(self):
         self._unsub = async_dispatcher_connect(
@@ -237,29 +244,27 @@ class MySairModeSensor(AvailabilityMixin, SensorEntity):
     def _handle_zone_update(self, zone):
         self._mark_status_received()
         # 'e' = encendido; calor/frío = paridad de 'm'. Ver docs/protocol-findings.md.
-        new_state = "OFF"
+        new_state = "off"
         if zone.get("is_on"):
             if zone.get("is_cool"):
-                new_state = "COOL"
+                new_state = "cool"
             elif zone.get("is_heat"):
-                new_state = "HEAT"
+                new_state = "heat"
             else:
-                new_state = "ON"
+                new_state = "on"
         if new_state != self._state:
             self._state = new_state
-            _LOGGER.debug(
-                f"[MySair Sensor] 🔄 {self._zone_name} {self._attr_name}: {self._state}"
-            )
+            _LOGGER.debug(f"[MySair Sensor] 🔄 {self._zone_name} mode: {self._state}")
 
         # Medio activo (F4/AC-vs-suelo): 'm' distingue AC-solo/suelo-solo/mixto
         # con independencia de encendido/apagado (se conserva aunque la zona
         # esté apagada). Ver docs/protocol-findings.md §4.
         if zone.get("is_ac") and zone.get("is_floor"):
-            self._medium = "mixto"
+            self._medium = "air_and_floor"
         elif zone.get("is_floor"):
-            self._medium = "suelo"
+            self._medium = "floor"
         elif zone.get("is_ac"):
-            self._medium = "ac"
+            self._medium = "air"
         else:
             self._medium = None
 
@@ -279,13 +284,12 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
 
     _attr_native_unit_of_measurement = UnitOfRatio.PERCENTAGE
     _attr_device_class = SensorDeviceClass.HUMIDITY
-    _attr_icon = "mdi:water-percent"
+    # No name, no icon: HA derives both from the device class.
 
     def __init__(self, hass, inst_ref, device_id, name):
         self.hass = hass
         self.inst_ref = inst_ref
         self.device_id = device_id
-        self._attr_name = "Humedad"
         self._attr_unique_id = f"mysair_humidity_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
         self._zone_name = name  # solo para logs
@@ -316,7 +320,5 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
         new_val = zone.get("humidity")
         if new_val != self._state:
             self._state = new_val
-            _LOGGER.debug(
-                f"[MySair Sensor] 💧 {self._zone_name} {self._attr_name}: {new_val}%"
-            )
+            _LOGGER.debug(f"[MySair Sensor] 💧 {self._zone_name} humidity: {new_val}%")
         self.async_write_ha_state()

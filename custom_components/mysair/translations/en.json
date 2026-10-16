@@ -39,5 +39,46 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "cloud_connection": {
+        "name": "Cloud connection",
+        "state": {
+          "online": "Online",
+          "offline": "Offline"
+        }
+      },
+      "target_temperature": {
+        "name": "Target temperature"
+      },
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "off": "Off",
+          "heat": "Heat",
+          "cool": "Cool",
+          "on": "On"
+        },
+        "state_attributes": {
+          "medium": {
+            "name": "Medium",
+            "state": {
+              "air": "Air",
+              "floor": "Floor",
+              "air_and_floor": "Air and floor"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
+      },
+      "floor_heating": {
+        "name": "Floor heating"
+      }
+    }
   }
 }
