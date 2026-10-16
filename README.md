@@ -1,69 +1,78 @@
-# MySair para Home Assistant
+# MySair für Home Assistant
 
-Integración **no oficial** de Home Assistant para el sistema de zonificación de climatización **MySair** (aire acondicionado y/o suelo radiante, por zona), construida por ingeniería inversa de la app web oficial (API HTTP + AWS IoT MQTT). No está afiliada ni respaldada por MySair.
+**Inoffizielle** Home-Assistant-Integration für das Klima-Zonensystem **MySair** (Klimaanlage und/oder Fußbodenheizung bzw. -kühlung, je Zone kombinierbar). Sie beruht auf der Analyse der offiziellen Web-App (HTTP-API und AWS-IoT-MQTT) und steht in keiner Verbindung zu MySair.
 
-> ⚠️ **No oficial.** El protocolo no está documentado públicamente por el fabricante; puede romperse sin aviso si MySair cambia su backend. Úsala bajo tu propio riesgo. Ver [`docs/known-unknowns.md`](docs/known-unknowns.md) para las incógnitas abiertas del protocolo.
+> ⚠️ **Inoffiziell.** Der Hersteller dokumentiert das Protokoll nicht öffentlich; ändert MySair sein Backend, kann die Integration ohne Vorwarnung ausfallen. Nutzung auf eigenes Risiko. Offene Fragen zum Protokoll stehen in [`docs/known-unknowns.md`](docs/known-unknowns.md).
 
-## Qué hace
+## Herkunft
 
-- **Descubre** la topología de tu cuenta: `Location → Installation → Device (zona)`.
-- Recibe el **estado en tiempo real** (temperatura, consigna, modo, encendido) por MQTT sobre WebSocket (AWS IoT), con un refresco de respaldo por HTTP cada 2 minutos.
-- Permite **controlar** cada zona (encendido/apagado, modo calor/frío, temperatura consigna, y suelo radiante si la zona lo tiene) desde Home Assistant.
+Dieses Repository ist ein Fork von [jclgranados/homeassistant-mysair](https://github.com/jclgranados/homeassistant-mysair). Die Protokollanalyse und der Großteil der Integration stammen von dort – vielen Dank an jclgranados. Der Fork ergänzt unter anderem korrekte Luftfeuchtewerte, eine deutsche Bedienoberfläche und deutsche Dokumentation. Die Änderungen stehen im [`CHANGELOG.md`](CHANGELOG.md).
 
-## Entidades por zona
+## Funktionsumfang
 
-| Entidad | Tipo | Descripción |
+- **Erkennt** den Aufbau des Kontos: `Location → Installation → Device (Zone)`.
+- Empfängt den **Zustand in Echtzeit** (Temperatur, Soll-Temperatur, Modus, Ein/Aus, Luftfeuchte) per MQTT über WebSocket (AWS IoT); zusätzlich fragt sie den Zustand alle 2 Minuten per HTTP ab.
+- **Steuert** jede Zone (Ein/Aus, Heizen/Kühlen, Soll-Temperatur, Lüfterstufe und – falls vorhanden – Fußbodenheizung) aus Home Assistant heraus.
+
+## Entitäten je Zone
+
+Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezeigt wird die in Home Assistant eingestellte Sprache. Jede Zone wird als eigenes Gerät angelegt, dessen Name der Zonenname aus dem MySair-Konto ist. Die Entity-IDs bildet Home Assistant bei der Einrichtung aus Gerätename und Entitätsname in der eingestellten Sprache. Die Spalte „Entity-ID“ zeigt die Form bei deutscher Oberfläche; bei englischer Oberfläche lauten die Endungen `_power`, `_floor_heating`, `_temperature`, `_target_temperature`, `_mode` und `_humidity`.
+
+| Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
-| `climate.<zona>` | Climate | Termostato: encendido/apagado, modo calor/frío (según disponibilidad real de la zona), temperatura objetivo, min/max reales, velocidad de ventilador (manual 1-3 o automático, si la zona lo soporta) |
-| `switch.<zona>` | Switch | Encendido/apagado, preservando el último modo usado |
-| `switch.<zona>_suelo` | Switch | Suelo radiante encendido/apagado, combinable con el AC de la misma zona. Aparece como "no disponible" en zonas sin esa capacidad |
-| `sensor.<zona>_temperatura_actual` | Sensor | Temperatura actual de la zona |
-| `sensor.<zona>_temperatura_consigna` | Sensor | Temperatura objetivo (setpoint) |
-| `sensor.<zona>_modo` | Sensor | Modo actual (`OFF`/`HEAT`/`COOL`); atributo `medio` (`ac`/`suelo`/`mixto`) indica qué medio está activo, se conserva aunque la zona esté apagada |
-| `sensor.<zona>_humedad` | Sensor | Humedad relativa de la zona |
+| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfterstufe (1–3 oder Automatik, sofern die Zone das unterstützt) |
+| Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus; beim Einschalten bleibt der zuletzt genutzte Modus erhalten |
+| Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußbodenheizung ein/aus, kombinierbar mit der Klimaanlage derselben Zone. In Zonen ohne Fußbodenheizung „nicht verfügbar“ |
+| Temperatur | `sensor.<zone>_temperatur` | Aktuelle Raumtemperatur |
+| Soll-Temperatur | `sensor.<zone>_soll_temperatur` | Eingestellte Zieltemperatur |
+| Modus | `sensor.<zone>_modus` | Aktueller Modus (`off`/`heat`/`cool`/`on`, angezeigt als Aus/Heizen/Kühlen/Ein). Das Attribut `medium` (`air`/`floor`/`air_and_floor`, angezeigt als Luft/Fußboden/Luft und Fußboden) gibt an, welches Medium aktiv ist; es bleibt auch bei ausgeschalteter Zone erhalten |
+| Luftfeuchtigkeit | `sensor.<zone>_luftfeuchtigkeit` | Relative Luftfeuchte; „unbekannt“, wenn das Thermostat keinen Feuchtesensor hat |
 
-## Otras entidades
+## Weitere Entitäten
 
-| Entidad | Tipo | Descripción |
+| Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
-| `sensor.mysair_conexion_mqtt` | Sensor | Una por cuenta configurada: estado de la conexión MQTT (`online`/`offline`), hora de la última actualización recibida, y métricas de reconexión/parseo (para depuración) |
+| Cloud-Verbindung | `sensor.mysair_cloud_verbindung` | Eine je eingerichtetem Konto, als Diagnose-Entität: Zustand der MQTT-Verbindung (Verbunden/Getrennt), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Nachrichtenauswertung (zur Fehlersuche) |
 
-## Instalación
+Bestehende Installationen behalten ihre bisherigen Entity-IDs. Wer die neuen, sprachabhängigen IDs möchte, entfernt die Integration und richtet sie neu ein; Dashboards und Automationen müssen danach angepasst werden.
 
-### Opción A — HACS (repositorio personalizado)
+## Installation
 
-1. HACS → menú (⋮) → **Repositorios personalizados**.
-2. Añade `https://github.com/jclgranados/homeassistant-mysair` como tipo **Integración**.
-3. Busca "MySair" en HACS e instálala.
-4. Reinicia Home Assistant.
+### Variante A – HACS (benutzerdefiniertes Repository)
 
-### Opción B — Manual
+1. HACS → Menü (⋮) → **Benutzerdefinierte Repositories**.
+2. `https://github.com/PaulWepunkt/ha-mysair` mit dem Typ **Integration** hinzufügen.
+3. In HACS nach „MySair“ suchen und installieren.
+4. Home Assistant neu starten.
 
-1. Copia la carpeta `custom_components/mysair/` de este repositorio a `<config>/custom_components/mysair/` en tu instalación de Home Assistant.
-2. Reinicia Home Assistant por completo (no solo recargar la integración).
+### Variante B – manuell
 
-## Configuración
+1. Den Ordner `custom_components/mysair/` dieses Repositorys nach `<config>/custom_components/mysair/` der Home-Assistant-Installation kopieren.
+2. Home Assistant vollständig neu starten (ein Neuladen der Integration genügt nicht).
 
-Ajustes → Dispositivos y servicios → Añadir integración → **MySair** → introduce el email y la contraseña de tu cuenta MySair.
+## Einrichtung
 
-- La contraseña **no se guarda**: solo se usa una vez para obtener un `refresh_token`, que es lo que se persiste y lo que renueva la sesión en cada arranque (ver [`docs/security-and-privacy.md`](docs/security-and-privacy.md)).
-- Si la sesión deja de ser válida (p. ej. el `refresh_token` expira), Home Assistant te pedirá reautenticarte desde la propia UI de la integración, sin perder la configuración existente.
+Einstellungen → Geräte & Dienste → Integration hinzufügen → **MySair** → E-Mail-Adresse und Passwort des MySair-Kontos eingeben.
 
-## Limitaciones conocidas
+- Das Passwort wird **nicht gespeichert**: Es dient einmalig dazu, ein `refresh_token` zu erhalten. Nur dieses wird gespeichert und erneuert die Sitzung bei jedem Start (siehe [`docs/security-and-privacy.md`](docs/security-and-privacy.md)).
+- Wird die Sitzung ungültig (z. B. weil das `refresh_token` abgelaufen ist), fordert Home Assistant über die Integration eine erneute Anmeldung an; die bestehende Konfiguration bleibt dabei erhalten.
 
-- **Las entidades tardan unos segundos en mostrar datos reales tras un arranque/recarga**: aparecen como "no disponible" hasta recibir el primer status por MQTT (y de nuevo si se pierde la conexión más de 6 minutos), en vez de mostrar valores por defecto como si fueran en tiempo real.
-- **Solo la primera `Location`** de la cuenta: si tienes varias ubicaciones, solo se cargan las instalaciones de la primera (decisión de alcance, ver `docs/known-unknowns.md` #15).
-- **Sin temporizador ni programas por horario**: el backend no expone ninguna forma confirmada de fijarlos (solo de leerlos); adivinar el formato no es una opción responsable (decisión de alcance, ver `docs/known-unknowns.md` #27).
-- **Sin modo automático (HVAC)**: no es una carencia de la integración — el protocolo en sí no tiene ningún modo de cambio automático calor/frío (ver `docs/protocol-findings.md` §4). El único "automático" real del sistema es la velocidad de ventilador, que sí está implementada.
-- Requiere Home Assistant **≥ 2026.8.0**.
+## Bekannte Einschränkungen
 
-## Documentación técnica
+- **Nach einem Start oder Neuladen dauert es einige Sekunden, bis echte Werte erscheinen**: Bis zum ersten Status per MQTT sind die Entitäten „nicht verfügbar“ (ebenso, wenn die Verbindung länger als 6 Minuten unterbrochen ist), statt Standardwerte als Echtzeitdaten auszugeben.
+- **Nur die erste `Location`** des Kontos: Bei mehreren Standorten werden nur die Installationen des ersten geladen (bewusste Abgrenzung, siehe `docs/known-unknowns.md` #15).
+- **Keine Zeitprogramme oder Timer**: Das Backend bietet keinen bestätigten Weg, sie zu setzen (nur zu lesen); das Format zu raten, wäre nicht verantwortbar (bewusste Abgrenzung, siehe `docs/known-unknowns.md` #27).
+- **Kein automatischer Heiz-/Kühlmodus**: Das ist keine Lücke der Integration – das Protokoll selbst kennt keinen automatischen Wechsel zwischen Heizen und Kühlen (siehe `docs/protocol-findings.md` §4). Die einzige echte Automatik des Systems ist die Lüfterstufe, und die ist umgesetzt.
+- **Heizen/Kühlen wird je Zone gesetzt**: Arbeitet die Außeneinheit einer Anlage nur in einer Richtung für alle Zonen, verhindert die Integration widersprüchliche Einstellungen derzeit nicht. In diesem Fall die Richtung für alle Zonen einheitlich wählen.
+- Erfordert Home Assistant **≥ 2026.8.0**.
 
-Para arquitectura, protocolo HTTP/MQTT, modelo de dominio, estrategia de tests y roadmap, ver la carpeta [`docs/`](docs/) y [`CLAUDE.md`](CLAUDE.md).
+## Technische Dokumentation
 
-## Desarrollo y contribuciones
+Architektur, HTTP-/MQTT-Protokoll, Domänenmodell, Teststrategie und Roadmap stehen im Ordner [`docs/`](docs/) und in [`CLAUDE.md`](CLAUDE.md).
 
-Tests P0/P1 (parser, builders MQTT, firma SigV4, cliente HTTP) corren sin Home Assistant:
+## Entwicklung und Beiträge
+
+Die Tests P0/P1 (Parser, MQTT-Builder, SigV4-Signatur, HTTP-Client) laufen ohne Home Assistant:
 
 ```bash
 python -m venv .venv-test && source .venv-test/bin/activate
@@ -71,13 +80,13 @@ pip install -r requirements-test.txt
 pytest
 ```
 
-Tests P2 (config flow, setup/unload) usan un harness real de Home Assistant, vía Docker — no instala nada en tu máquina:
+Die Tests P2 (Einrichtungsdialog, Setup/Unload, Entitäten) nutzen eine echte Home-Assistant-Testumgebung über Docker – auf dem eigenen Rechner wird nichts installiert:
 
 ```bash
 docker compose run --rm test-ha
 ```
 
-Lint y formato con `ruff` (config en `pyproject.toml`, reglas por defecto):
+Lint und Formatierung mit `ruff` (Konfiguration in `pyproject.toml`, Standardregeln):
 
 ```bash
 pip install -r requirements-lint.txt
@@ -85,12 +94,12 @@ ruff check custom_components/mysair tests
 ruff format custom_components/mysair tests
 ```
 
-Issues y pull requests son bienvenidos. Revisa `CLAUDE.md` antes de tocar el protocolo o las credenciales.
+Issues und Pull Requests sind willkommen. Vor Änderungen am Protokoll oder an der Anmeldung bitte `CLAUDE.md` lesen.
 
-## Changelog
+## Änderungsprotokoll
 
-Ver [`CHANGELOG.md`](CHANGELOG.md).
+Siehe [`CHANGELOG.md`](CHANGELOG.md).
 
-## Licencia
+## Lizenz
 
 [MIT](LICENSE)
