@@ -100,7 +100,7 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `translations/de.json`, `translations/es.json` | Deutsch und Spanisch: Einrichtungsdialog, Dienst, Entitätsnamen und -zustände |
 | `icons.json` | Symbole je `translation_key` und Zustand |
 | `brand/` | Symbol und Logo (lokal, ab HA 2026.3.0) |
-| `manifest.json` | Manifest (`requirements`: nur `requests` und `websocket-client`) |
+| `manifest.json` | Manifest (`requirements`: nur `websocket-client`; `requests` bringt Home Assistant selbst mit und darf nicht eingetragen werden) |
 
 | Wurzelverzeichnis | Aufgabe |
 |---|---|
