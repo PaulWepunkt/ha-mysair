@@ -242,10 +242,10 @@ Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.m
 - **Vorausschauende Erneuerung der AWS-Zugangsdaten** vor `aws_expires_at`; ohne sie trennt AWS IoT die Verbindung regelmäßig.
 - **Eindeutige MQTT-`client_id` je Verbindung**, sonst verdrängen sich Integration und offizielle App gegenseitig.
 - **Entity-IDs:** Mit `has_entity_name` bildet HA die IDs aus Gerät (= Zonenname) und Entitätsname in der eingestellten Sprache. Bestehende Installationen behalten ihre IDs, solange die `unique_id` gleich bleibt (dafür gibt es einen Test). `unique_id`s nie ändern.
+- **Erfolg von `/send/instruction`** = HTTP 201 + leere Liste `error`. Den Text in `msg` nie vergleichen: Er hängt von der Kontosprache ab (`"Creado"`, `"Created"` …).
 - **Verwaiste Zonen** werden bei jedem Setup/Reload entfernt (`_cleanup_stale_zone_devices`); das Kontogerät (Kennung `entry_id`) bleibt unangetastet.
 
 Offen:
-- 🔴 **Erfolgsprüfung von `/send/instruction`** erwartet `msg == "Creado"`; englischsprachige Konten erhalten `"Created"` (`docs/mysair-http-api.md` §3.1).
 - 🟠 **Widersprüchliche Heiz-/Kühlrichtung** zwischen Zonen wird nicht verhindert.
 - 🟡 **Fehler bei Befehlen** erscheinen nur im Log, nicht in der Oberfläche.
 - 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
