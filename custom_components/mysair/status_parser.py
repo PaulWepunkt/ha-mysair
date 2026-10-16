@@ -54,6 +54,30 @@ def _to_str(value):
     return None if value is None else str(value)
 
 
+# Humidity fields in order of preference. The official web app displays
+# ``hm`` (``getHumidity(){return this.hm}``). The zone JSON can carry both
+# fields, with ``hum`` reporting "0" while ``hm`` holds the measured value
+# shown in the app. ``hum`` is kept as a fallback for backend variants that
+# might only send that field.
+_HUMIDITY_FIELDS = ("hm", "hum")
+
+
+def parse_humidity(zone):
+    """Return the relative humidity of a raw zone dict, or ``None``.
+
+    Takes the first field from ``_HUMIDITY_FIELDS`` holding a positive number.
+    A value of 0 is treated as "unknown" rather than 0 %: a real room never
+    reads 0 % relative humidity, so a zero means the thermostat has no
+    humidity sensor or has not measured yet. Reporting ``None`` keeps false
+    zeros out of long-term statistics and humidity-based automations.
+    """
+    for field in _HUMIDITY_FIELDS:
+        value = _to_float(zone.get(field))
+        if value is not None and value > 0:
+            return value
+    return None
+
+
 def parse_mode(m):
     """Interpreta el campo ``m`` (modo, 0-5) del payload de estado.
 
@@ -102,11 +126,9 @@ def parse_status_payload(payload):
     docs/protocol-findings.md):
       - ``e``  → ENCENDIDO: "0"=off, "1"=on, "2"=standby  (NO es el modo)
       - ``m``  → MODO 0-5: par=calor, impar=frío; {0,1,4,5}=AC, {2,3,4,5}=suelo
-      - ``tr``/``tc``/``tmm``/``tmx``/``hum`` → temp actual/consigna/min/max/humedad
-        (``hum``, no ``hm``: corregido tras confirmarlo con una captura real de
-        producción el 2026-07-20 — la app internamente expone `this.hm`, pero
-        el campo en el JSON de la zona es `hum`. Se mantiene `hm` como
-        fallback por si alguna variante del backend lo envía así.)
+      - ``tr``/``tc``/``tmm``/``tmx`` → temp actual/consigna/min/max
+      - humidity: ``hm`` first, ``hum`` as fallback, 0 = unknown
+        (see ``parse_humidity``)
       - capacidades: ``c``=permite calor, ``f``=permite frío, ``v``=fan, ``s``=suelo
 
     Cada zona en ``zones`` incluye: ``ctl``, ``zone_id``, ``zone_name``,
@@ -164,7 +186,7 @@ def parse_status_payload(payload):
                 "temp_target": _to_float(t.get("tc")),
                 "temp_min": _to_float(t.get("tmm")),
                 "temp_max": _to_float(t.get("tmx")),
-                "humidity": _to_float(t.get("hum", t.get("hm"))),
+                "humidity": parse_humidity(t),
                 "power": power,  # e crudo: "0"/"1"/"2"
                 "is_on": power != "0",  # standby ("2") también cuenta como encendido
                 "is_standby": power == "2",

@@ -181,18 +181,62 @@ def test_parse_status_payload_missing_temps_are_none():
     assert zone["humidity"] is None
 
 
-def test_parse_status_payload_humidity_reads_hum_field():
-    # Campo real confirmado en producción (2026-07-20): "hum", no "hm".
+def test_parse_status_payload_humidity_prefers_hm_over_zero_hum():
+    # Both fields present: "hum" reports "0", "hm" carries the measured
+    # value shown in the official app.
+    payload = {
+        "ctl": "X",
+        "value": '{"t":[{"rf":"D","e":"0","m":"1","hum":"0","hm":"58"}]}',
+    }
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["humidity"] == 58.0
+
+
+def test_parse_status_payload_humidity_prefers_hm_when_both_non_zero():
+    payload = {
+        "ctl": "X",
+        "value": '{"t":[{"rf":"D","e":"1","m":"0","hum":"55","hm":"60"}]}',
+    }
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["humidity"] == 60.0
+
+
+def test_parse_status_payload_humidity_reads_hm_field():
+    payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"1","m":"0","hm":"40"}]}'}
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["humidity"] == 40.0
+
+
+def test_parse_status_payload_humidity_falls_back_to_hum_field():
+    # Fallback for backend variants that might only send "hum".
     payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"1","m":"0","hum":"55"}]}'}
     zone = parse_status_payload(payload)["zones"][0]
     assert zone["humidity"] == 55.0
 
 
-def test_parse_status_payload_humidity_falls_back_to_hm_field():
-    # "hm" como fallback defensivo por si alguna variante del backend lo usa.
-    payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"1","m":"0","hm":"40"}]}'}
+def test_parse_status_payload_humidity_zero_is_unknown():
+    # 0 % is not a real room humidity: no sensor / not measured -> None.
+    payload = {
+        "ctl": "X",
+        "value": '{"t":[{"rf":"D","e":"1","m":"0","hum":"0","hm":"0"}]}',
+    }
     zone = parse_status_payload(payload)["zones"][0]
-    assert zone["humidity"] == 40.0
+    assert zone["humidity"] is None
+
+
+def test_parse_status_payload_humidity_zero_hm_falls_back_to_hum():
+    payload = {
+        "ctl": "X",
+        "value": '{"t":[{"rf":"D","e":"1","m":"0","hm":"0","hum":"52"}]}',
+    }
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["humidity"] == 52.0
+
+
+def test_parse_status_payload_humidity_invalid_is_unknown():
+    payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"1","m":"0","hm":""}]}'}
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["humidity"] is None
 
 
 def test_parse_status_payload_default_power_off_when_missing_e():
