@@ -418,6 +418,24 @@ class MySairAPI:
     # ==========================================================
     # ZONE COMMAND HELPERS (for climate, switch, etc.)
     # ==========================================================
+    def _app_name(self):
+        """Return the account's MQTT user for the ``app`` field of an instruction.
+
+        The official app sends ``session.getClientId()`` (= ``aws_mqtt_user``)
+        here. If the AWS credentials are not loaded yet (e.g. a command sent
+        right after startup), they are fetched first instead of falling back to
+        a fixed value, which would identify a different account. If fetching
+        fails, its classified error propagates and the command is not sent.
+        """
+        user = (self.aws_credentials or {}).get("aws_mqtt_user")
+        if not user:
+            _LOGGER.debug(
+                "[MySairAPI] No AWS credentials loaded yet, fetching them before sending"
+            )
+            self.refresh_aws_credentials()
+            user = self.aws_credentials["aws_mqtt_user"]
+        return user
+
     def send_zone_command(
         self, ctl, device, command_type, value=None, temperature=None
     ):
@@ -434,11 +452,7 @@ class MySairAPI:
             if not ctl or not device:
                 raise ValueError("Missing required parameters (ctl or device).")
 
-            app_name = (
-                self.aws_credentials.get("aws_mqtt_user", "web0077")
-                if self.aws_credentials
-                else "web0077"
-            )
+            app_name = self._app_name()
 
             if command_type == "mode":
                 if value not in ["0", "1"]:
@@ -492,11 +506,7 @@ class MySairAPI:
             if not ctl:
                 raise ValueError("Missing required parameter 'ctl'.")
 
-            app_name = (
-                self.aws_credentials.get("aws_mqtt_user", "web0077")
-                if self.aws_credentials
-                else "web0077"
-            )
+            app_name = self._app_name()
 
             if command_type == "stop":
                 payload_value = "1"

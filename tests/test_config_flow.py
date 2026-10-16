@@ -16,6 +16,21 @@ from custom_components.mysair.api import (
 )
 
 
+@pytest.fixture(autouse=True)
+def skip_entry_setup(monkeypatch):
+    """The flow tests do not exercise the setup of the created entry.
+
+    Without this, creating or reloading the entry runs the real setup, which
+    tries to reach the MySair backend (covered by test_init_setup_unload.py).
+    """
+    import custom_components.mysair as integration
+
+    async def _setup_entry(hass, entry):
+        return True
+
+    monkeypatch.setattr(integration, "async_setup_entry", _setup_entry)
+
+
 def _mock_login_ok(refresh_token="REFRESH_NEW"):
     def _login(self):
         self.access_token = "ACCESS_NEW"

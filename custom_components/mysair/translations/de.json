@@ -35,7 +35,7 @@
       "fields": {
         "installation_ref": {
           "name": "Anlagenreferenz",
-          "description": "Referenz (ctl) der zu stoppenden Anlage, wie sie in Klammern im Gerätenamen ihrer Entitäten steht (z. B. „MYS…“)."
+          "description": "Referenz (ctl) der zu stoppenden Anlage, beginnt mit „MYS“. Sie steht im Diagnose-Download der Integration."
         }
       }
     }

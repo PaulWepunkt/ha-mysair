@@ -188,12 +188,12 @@ def _client():
 def test_on_message_extracts_topic_without_parens():
     client, received = _client()
     msg = _publish_message(
-        b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
+        b'pro/v1/get/usr/web0000/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
     )
     client._on_message(None, msg)
 
     assert len(received) == 1
-    assert received[0]["topic"] == "pro/v1/get/usr/web0077/feedback"
+    assert received[0]["topic"] == "pro/v1/get/usr/web0000/feedback"
     assert received[0]["payload"] == {"orderId": "5b1ae0", "ctl": "INST_A"}
 
 
@@ -255,9 +255,9 @@ def test_decode_varint_incomplete_returns_none():
 
 def test_parse_mqtt_publish_status_topic_matches_real_capture_length():
     # 40 characters: the length that produced a ghost "(" in the logs.
-    topic = "pro/v1/get/ctl/MYS94B97E0C9177FB6/status"
+    topic = "pro/v1/get/ctl/MYS000000000000000/status"
     assert len(topic) == 40
-    payload = b'{"ctl":"MYS94B97E0C9177FB6","value":"{}"}'
+    payload = b'{"ctl":"MYS000000000000000","value":"{}"}'
     frame = _build_publish_frame(topic, payload, qos=0)
 
     parsed_topic, parsed_payload = parse_mqtt_publish(frame)
@@ -268,7 +268,7 @@ def test_parse_mqtt_publish_status_topic_matches_real_capture_length():
 
 def test_parse_mqtt_publish_feedback_topic_matches_real_capture_length():
     # 31 characters: the length that showed no visible ghost character.
-    topic = "pro/v1/get/usr/web0077/feedback"
+    topic = "pro/v1/get/usr/web0000/feedback"
     assert len(topic) == 31
     payload = b'{"orderId":"5b1ae0","ctl":"INST_A"}'
     frame = _build_publish_frame(topic, payload, qos=0)
@@ -304,7 +304,7 @@ def test_parse_mqtt_publish_rejects_empty_message():
 
 def test_on_message_uses_strict_parser_for_well_formed_frame():
     client, received = _client()
-    topic = "pro/v1/get/usr/web0077/feedback"
+    topic = "pro/v1/get/usr/web0000/feedback"
     payload = b'{"orderId":"5b1ae0","ctl":"INST_A"}'
     frame = _build_publish_frame(topic, payload, qos=0)
 
@@ -321,12 +321,12 @@ def test_on_message_falls_back_when_strict_parse_inconclusive():
     # heuristic (unchanged behaviour for these cases).
     client, received = _client()
     msg = _publish_message(
-        b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
+        b'pro/v1/get/usr/web0000/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
     )
     client._on_message(None, msg)
 
     assert len(received) == 1
-    assert received[0]["topic"] == "pro/v1/get/usr/web0077/feedback"
+    assert received[0]["topic"] == "pro/v1/get/usr/web0000/feedback"
 
 
 # --- Proactive connection refresh (prevents AWS from dropping it first) ---
@@ -478,7 +478,7 @@ def test_last_message_at_set_on_strict_parse_success():
     client, _ = _client()
     assert client.last_message_at is None
 
-    topic = "pro/v1/get/usr/web0077/feedback"
+    topic = "pro/v1/get/usr/web0000/feedback"
     payload = b'{"orderId":"5b1ae0","ctl":"INST_A"}'
     frame = _build_publish_frame(topic, payload, qos=0)
     client._on_message(None, frame)
@@ -491,7 +491,7 @@ def test_last_message_at_set_on_strict_parse_success():
 def test_last_message_at_set_on_fallback_parse_success():
     client, _ = _client()
     msg = _publish_message(
-        b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
+        b'pro/v1/get/usr/web0000/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
     )
     client._on_message(None, msg)
 
@@ -618,12 +618,12 @@ def test_on_message_legacy_fallback_unchanged_for_existing_fixtures():
     # before it was introduced.
     client, received = _client()
     msg = _publish_message(
-        b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
+        b'pro/v1/get/usr/web0000/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
     )
     client._on_message(None, msg)
 
     assert len(received) == 1
-    assert received[0]["topic"] == "pro/v1/get/usr/web0077/feedback"
+    assert received[0]["topic"] == "pro/v1/get/usr/web0000/feedback"
     assert client._recv_buffer == b""
 
 
@@ -637,7 +637,7 @@ def test_on_message_split_legacy_fallback_message_across_two_calls():
     # point (see the parametrised test above).
     client, received = _client()
     msg = _publish_message(
-        b'pro/v1/get/usr/web0077/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
+        b'pro/v1/get/usr/web0000/feedback{"orderId":"5b1ae0","ctl":"INST_A"}'
     )
 
     client._on_message(None, msg[:1])
@@ -645,7 +645,7 @@ def test_on_message_split_legacy_fallback_message_across_two_calls():
 
     client._on_message(None, msg[1:])
     assert len(received) == 1
-    assert received[0]["topic"] == "pro/v1/get/usr/web0077/feedback"
+    assert received[0]["topic"] == "pro/v1/get/usr/web0000/feedback"
 
 
 def test_recv_buffer_resets_when_declared_length_exceeds_cap():

@@ -35,7 +35,7 @@
       "fields": {
         "installation_ref": {
           "name": "Installation reference",
-          "description": "Reference (ctl) of the installation to stop, as it appears in parentheses in the device name of its entities (e.g. \"MYS94B97E0C9177FB6\")."
+          "description": "Reference (ctl) of the installation to stop, starting with \"MYS\". It is listed in the integration's diagnostics download."
         }
       }
     }

@@ -105,7 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             f"MySair session invalid or expired: {err}"
         ) from err
     except MySairConnectionError as err:
-        raise ConfigEntryNotReady(f"No se pudo conectar con MySair: {err}") from err
+        raise ConfigEntryNotReady(f"Could not connect to MySair: {err}") from err
 
     # Migration: entries created before A6 stored password/access_token in
     # plain text; they are no longer used and are removed from the config
@@ -153,7 +153,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             f"MySair session invalid during discovery: {err}"
         ) from err
     except MySairConnectionError as err:
-        raise ConfigEntryNotReady(f"No se pudo conectar con MySair: {err}") from err
+        raise ConfigEntryNotReady(f"Could not connect to MySair: {err}") from err
 
     _cleanup_stale_zone_devices(hass, entry, all_devices)
 

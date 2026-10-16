@@ -8,7 +8,7 @@ on:
 
 jobs:
   pure-tests:
-    name: P0/P1 (sin Home Assistant)
+    name: P0/P1 (without Home Assistant)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,21 +19,21 @@ jobs:
       - run: pytest
 
   ha-harness-tests:
-    name: P2 (harness de Home Assistant, Docker)
+    name: P2 (Home Assistant test harness, Docker)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker compose run --rm test-ha
 
   hassfest:
-    name: hassfest (manifest / estructura de la integración)
+    name: hassfest (manifest / integration structure)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
   ruff:
-    name: ruff (lint + formato)
+    name: ruff (lint + format)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

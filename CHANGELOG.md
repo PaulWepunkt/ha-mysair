@@ -23,7 +23,13 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - **Luftfeuchte 0 wird als „unbekannt“ gemeldet statt als 0 %.** Eine echte Raumluftfeuchte von 0 % gibt es nicht; eine 0 bedeutet, dass das Thermostat keinen Feuchtesensor hat oder noch nicht gemessen hat. So landen keine falschen Nullen in der Langzeitstatistik und lösen keine feuchtebasierten Automationen aus.
 - **Dokumentation auf Deutsch.** README, `CLAUDE.md`, `CHANGELOG.md` und alle Dokumente in `docs/` sind übersetzt und auf den aktuellen Stand gebracht. Die README nennt dieses Repository als Installationsquelle für HACS, beschreibt die aktuellen Entitäten und verweist auf das Ursprungs-Repository. `docs/execution-plan.md` ist eine Zusammenfassung; das frühere Arbeitsprotokoll liegt in der Git-Historie.
 
+- Restliche spanische Texte in Code, Tests und Konfigurationsdateien (Fehlermeldungen beim Start, Kommentare, Namen der CI-Jobs, `services.yaml`) auf Englisch.
+- `manifest.json` verweist für Dokumentation, Fehlermeldungen und Codeowner auf dieses Repository.
+- Beschreibung des Felds „Anlagenreferenz“ im Dienst `mysair.stop_installation`: Die Referenz steht im Diagnose-Download (seit den neuen Gerätenamen nicht mehr im Gerätenamen). Beispielwerte sind neutrale Platzhalter.
+
 ### Fixed
+- **Befehle ohne geladene AWS-Zugangsdaten** wurden mit einer fest eingetragenen, fremden Kontokennung im Feld `app` gesendet. Jetzt werden die Zugangsdaten vorher geholt und die eigene Kennung verwendet; gelingt das nicht, wird der Befehl nicht gesendet.
+- Tests mit HA-Testumgebung öffnen keine Netzwerkverbindungen mehr (periodische Abfrage und Einrichtungsdialog), wodurch Fehler beim Aufräumen nach einzelnen Tests entfallen.
 - **Luftfeuchte zeigte immer 0 %.** Das Zonen-JSON enthält zwei Feuchtefelder: `hum` meldet `"0"`, `hm` trägt den tatsächlichen Messwert, den auch die offizielle Web-App anzeigt. Die Integration las bisher bevorzugt `hum`. Jetzt gilt: `hm` zuerst, `hum` nur noch als Ersatz, falls `hm` fehlt (`status_parser.parse_humidity`).
 
 ## [2.13.1] - 2026-09-12

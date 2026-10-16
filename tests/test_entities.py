@@ -688,7 +688,7 @@ async def test_entities_become_unavailable_after_stale_timeout(hass, monkeypatch
     assert hass.states.get("switch.salon_power").state == "unavailable"
 
 
-# --- Velocidad de ventilador (F2, docs/protocol-findings.md §9) ---
+# --- Fan speed (F2, docs/protocol-findings.md §9) ---
 
 
 async def test_climate_fan_mode_updates_from_mqtt_event(hass, monkeypatch):
