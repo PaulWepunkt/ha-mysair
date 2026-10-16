@@ -103,7 +103,7 @@ Gemeinsam für climate/sensor/switch (Bestätigt):
 - ✅ Einheitliche Klassifizierung der HTTP-Fehler (`api._http_error`): 5xx/429 vorübergehend, alles andere erneute Anmeldung.
 - ✅ `401` wird überall einmal mit erneuerter Sitzung wiederholt.
 - ✅ Stirbt die Sitzung im laufenden Betrieb, fordern MQTT-Thread und periodische Abfrage sofort die erneute Anmeldung an (`entry.async_start_reauth`).
-- 🔴 `send_instruction` akzeptiert als Erfolgsmeldung nur `msg == "Creado"`. Englischsprachige Konten erhalten `"Created"`; ihre Befehle werden ausgeführt, aber als abgelehnt geloggt und lösen keine Bestätigung aus. Korrektur geplant.
+- ✅ `send_instruction` wertet Erfolg sprachunabhängig aus (HTTP 201 und leere Liste `error`); der Text in `msg` hängt von der Kontosprache ab und wird nicht verglichen.
 
 ---
 
@@ -148,6 +148,5 @@ Der Pin in `requirements-test-ha.txt` muss mit der produktiv genutzten HA-Versio
 
 ## 12. Mögliche nächste Schritte
 
-1. 🔴 Erfolgsprüfung von `/send/instruction` sprachunabhängig machen.
-2. 🟡 Fehler bei Befehlen als übersetzte `HomeAssistantError` an die Oberfläche geben.
-3. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.
+1. 🟡 Fehler bei Befehlen als übersetzte `HomeAssistantError` an die Oberfläche geben.
+2. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.

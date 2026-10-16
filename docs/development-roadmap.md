@@ -98,7 +98,6 @@
 
 ## Offen (ohne Phasennummer)
 
-- **Erfolgsprüfung von `/send/instruction` sprachunabhängig machen** (`msg` „Creado“/„Created“) – 🔴, siehe `docs/mysair-http-api.md` §3.1.
 - **Schutz vor widersprüchlicher Heiz-/Kühlrichtung** für Anlagen, deren Außeneinheit nur eine Richtung für alle Zonen kann – 🟠.
 - **Fehler bei Befehlen sichtbar machen** (`HomeAssistantError` mit übersetzter Meldung) – 🟡.
 - **Tests für doppelte/vertauschte MQTT-Nachrichten** und für `account_mismatch` im Reauth – 🟢.

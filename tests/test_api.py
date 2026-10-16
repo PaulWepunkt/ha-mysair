@@ -251,9 +251,22 @@ def test_send_instruction_ok(fake_session, make_response):
     assert data["msg"] == "Creado"
 
 
-def test_send_instruction_rejected_msg_raises(fake_session, make_response):
-    fake_session.queue("post", make_response(201, {"msg": "Rechazado", "error": []}))
-    with pytest.raises(Exception):
+@pytest.mark.parametrize("msg", ["Creado", "Created", "", "any other text"])
+def test_send_instruction_success_does_not_depend_on_msg_language(
+    fake_session, make_response, msg
+):
+    # The text of "msg" depends on the account language; only the status code
+    # and the "error" list decide.
+    fake_session.queue("post", make_response(201, {"msg": msg, "error": []}))
+    data = _api(fake_session).send_instruction([{"command": "status"}])
+    assert data["msg"] == msg
+
+
+def test_send_instruction_error_list_raises(fake_session, make_response):
+    fake_session.queue(
+        "post", make_response(201, {"msg": "Created", "error": ["rejected"]})
+    )
+    with pytest.raises(Exception, match="Instruction rejected"):
         _api(fake_session).send_instruction([{"command": "x"}])
 
 

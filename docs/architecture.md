@@ -258,7 +258,7 @@ sequenceDiagram
     Note over E,IOT: Der echte Zustand kommt danach per MQTT (6.4)
 ```
 
-Hinweis: `send_instruction` erwartet derzeit `msg == "Creado"`. Das Backend antwortet je nach Kontosprache auch mit `"Created"`; dieser Fall wird noch fälschlich als Ablehnung gewertet (siehe `docs/mysair-http-api.md` §3.1).
+Hinweis: Als Erfolg gelten HTTP 201 und eine leere Liste `error`. Der Text in `msg` hängt von der Kontosprache ab (`"Creado"`, `"Created"` …) und wird nicht ausgewertet (siehe `docs/mysair-http-api.md` §3.1).
 
 ### 6.6 Wiederverbindung nach MQTT-Abbruch
 

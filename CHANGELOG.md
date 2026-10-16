@@ -28,6 +28,7 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - Beschreibung des Felds „Anlagenreferenz“ im Dienst `mysair.stop_installation`: Die Referenz steht im Diagnose-Download (seit den neuen Gerätenamen nicht mehr im Gerätenamen). Beispielwerte sind neutrale Platzhalter.
 
 ### Fixed
+- **Befehle wurden bei MySair-Konten, die nicht auf Spanisch eingestellt sind, fälschlich als abgelehnt gemeldet.** Die Integration verlangte als Antwort den spanischen Text `"Creado"`; je nach Kontosprache antwortet MySair aber anders, z. B. mit `"Created"`. Die Befehle wurden ausgeführt, im Log stand jedoch „Instruction rejected“ (auch bei der periodischen Abfrage alle 2 Minuten), und die Befehlsbestätigung wurde nicht verfolgt. Jetzt gelten HTTP 201 und eine leere Fehlerliste als Erfolg, unabhängig vom Text und damit für jede Kontosprache.
 - `manifest.json`: `requests` aus `requirements` entfernt. Home Assistant bringt die Bibliothek selbst mit, und `hassfest` lässt sie im Manifest einer Custom-Integration nicht mehr zu. Keine Änderung am Verhalten.
 - **Befehle ohne geladene AWS-Zugangsdaten** wurden mit einer fest eingetragenen, fremden Kontokennung im Feld `app` gesendet. Jetzt werden die Zugangsdaten vorher geholt und die eigene Kennung verwendet; gelingt das nicht, wird der Befehl nicht gesendet.
 - Tests mit HA-Testumgebung öffnen keine Netzwerkverbindungen mehr (periodische Abfrage und Einrichtungsdialog), wodurch Fehler beim Aufräumen nach einzelnen Tests entfallen.

@@ -159,12 +159,11 @@ Die Erkennungsmethoden geben Fehler als `MySairAuthError`/`MySairConnectionError
   { "msg": "<Bestätigungstext>", "error": [], "entity": { "value": [ { "orderId": "<ORDER_ID>" } ] } }
   ```
   `entity.value[0].orderId` dient der Zuordnung zur Quittung im MQTT-Topic `feedback` (`api.extract_order_id`).
-- **Prüfung (Bestätigt):** verlangt `status_code == 201`, `msg == "Creado"` und ein leeres `error`.
-  > ⚠️ **Bekannte Schwäche:** Der Text in `msg` hängt von der Sprache des MySair-Kontos ab (`"Creado"` oder `"Created"`). Ein englischsprachiges Konto erhält `"Created"`; der Befehl wird dann zwar ausgeführt, von der Integration aber als abgelehnt gewertet. Eine Korrektur ist geplant.
+- **Prüfung (Bestätigt):** verlangt `status_code == 201` und ein leeres `error`. Der Text in `msg` hängt von der Sprache des MySair-Kontos ab (`"Creado"`, `"Created"` …) und wird deshalb nicht ausgewertet, nur im DEBUG-Log ausgegeben. Erfolgreiche Antworten enthalten außerdem `meta` (`{"version": "1.0", "type": "MqttOrder"}`), das nicht genutzt wird.
 - **Bekannte Fehler:**
   - `401` → erneuert Token + AWS-Zugangsdaten und **wiederholt einmal**.
   - Jeder andere Code außer `201` → klassifiziert über `_http_error`.
-  - `msg` abweichend oder `error` nicht leer → Ausnahme „Instruction rejected“.
+  - `error` nicht leer → Ausnahme „Instruction rejected“.
 - **Zeitlimit:** 10 s. **Wiederholungen:** 1 (nur bei 401).
 - **Genutzt von:** `send_zone_command` (climate/switch), `send_installation_command` (Dienst, `refresh_status_periodic`).
 

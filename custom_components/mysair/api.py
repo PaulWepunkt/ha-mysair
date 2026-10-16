@@ -402,13 +402,16 @@ class MySairAPI:
             if resp.status_code != 201:
                 raise _http_error(resp.status_code, resp.text, "Instruction error")
 
+            # Success = HTTP 201 and an empty "error" list. "msg" is not
+            # checked: its text depends on the language of the MySair account
+            # ("Creado", "Created", ...), so comparing it rejected commands
+            # that had actually been accepted.
             data = resp.json()
-            msg = data.get("msg", "")
             error = data.get("error", [])
-            if msg != "Creado" or error:
+            if error:
                 raise Exception(f"Instruction rejected: {_truncate(data)}")
 
-            _LOGGER.debug("[MySairAPI] Instruction sent")
+            _LOGGER.debug(f"[MySairAPI] Instruction sent ({data.get('msg', '')})")
             return data
 
         except Exception as e:
