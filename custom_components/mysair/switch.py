@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Configura los switches de MySair (encendido/apagado por zona)."""
+    """Set up the MySair switches (power and floor heating per zone)."""
     data = hass.data[DOMAIN][entry.entry_id]
     api = data["api"]
     mqtt_client = data["mqtt"]
@@ -24,7 +24,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     for inst_ref, device_list in devices.items():
         for dev in device_list:
             dev_id = dev.get("reference") or dev.get("rf") or dev.get("id")
-            zone_name = dev.get("name", f"Zona {dev_id}")
+            zone_name = dev.get("name", f"Zone {dev_id}")
             entities.append(
                 MySairSwitch(hass, api, mqtt_client, inst_ref, dev_id, zone_name)
             )
@@ -33,11 +33,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
             )
 
     async_add_entities(entities)
-    _LOGGER.info(f"[MySair Switch] ✅ {len(entities)} switches creados.")
+    _LOGGER.info(f"[MySair Switch] {len(entities)} switches created.")
 
 
 class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
-    """Entidad Switch para encender o apagar cada termostato MySair."""
+    """Switch entity to turn a MySair zone on or off."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "power"
@@ -50,10 +50,10 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_switch_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._is_on = False
-        # Último modo AC conocido para encender preservándolo: "0"=calor, "1"=frío.
-        # Por defecto calor (encender NUNCA debe forzar frío). Ver docs/protocol-findings.md.
+        # Last known air mode, preserved when turning on: "0"=heat, "1"=cool.
+        # Defaults to heat (turning on must NEVER force cool). See docs/protocol-findings.md.
         self._last_ac_mode = "0"
         self._unsub = None
         self._init_command_feedback()
@@ -66,10 +66,10 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
     async def async_turn_on(self, **kwargs):
         previous_is_on = self._is_on
         try:
-            # Encender = enviar comando 'mode' (no existe power "1"). Preservamos el
-            # último modo calor/frío conocido; por defecto calor. Ver docs/protocol-findings.md.
+            # Turning on = sending the 'mode' command (there is no power "1"). The
+            # last known heat/cool mode is preserved; default heat. See docs/protocol-findings.md.
             _LOGGER.debug(
-                f"[MySair Switch] 🔛 Encendiendo {self.name} (modo {self._last_ac_mode})"
+                f"[MySair Switch] Turning on {self.name} (mode {self._last_ac_mode})"
             )
             response = await self.hass.async_add_executor_job(
                 self.api.send_zone_command,
@@ -87,12 +87,12 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self._is_on = True
             self.async_write_ha_state()
         except Exception as e:
-            _LOGGER.error(f"[MySair Switch] ❌ Error al encender {self.name}: {e}")
+            _LOGGER.error(f"[MySair Switch] Failed to turn on {self.name}: {e}")
 
     async def async_turn_off(self, **kwargs):
         previous_is_on = self._is_on
         try:
-            _LOGGER.debug(f"[MySair Switch] ⛔ Apagando {self.name}")
+            _LOGGER.debug(f"[MySair Switch] Turning off {self.name}")
             response = await self.hass.async_add_executor_job(
                 self.api.send_zone_command, self.inst_ref, self.device_id, "power"
             )
@@ -104,7 +104,7 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self._is_on = False
             self.async_write_ha_state()
         except Exception as e:
-            _LOGGER.error(f"[MySair Switch] ❌ Error al apagar {self.name}: {e}")
+            _LOGGER.error(f"[MySair Switch] Failed to turn off {self.name}: {e}")
 
     async def async_added_to_hass(self):
         self._unsub = async_dispatcher_connect(
@@ -126,22 +126,22 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self._mark_status_received()
         self._clear_pending_command()
         self._is_on = bool(zone.get("is_on"))
-        # Recordar el modo AC (calor/frío) para preservarlo al reencender.
+        # Remember the air mode (heat/cool) to preserve it when turning on again.
         if zone.get("is_ac") and zone.get("mode_raw") in ("0", "1"):
             self._last_ac_mode = zone.get("mode_raw")
         _LOGGER.debug(
-            f"[MySair Switch] 🔄 Estado {self.name}: {'ON' if self._is_on else 'OFF'}"
+            f"[MySair Switch] State {self.name}: {'ON' if self._is_on else 'OFF'}"
         )
         self.async_write_ha_state()
 
 
 class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
-    """Entidad Switch para encender/apagar el suelo radiante de una zona (F4).
+    """Switch entity to turn the floor heating of a zone on or off (F4).
 
-    No existe un comando dedicado en el protocolo: la app oficial recalcula
-    el valor de `m` (preservando calor/frío y el estado de AC) y lo envía
-    con el mismo comando `mode` que ya usa `climate.py`
-    (`toggleRadiatingFloor`/`setModeHeat`, ver docs/protocol-findings.md §4).
+    The protocol has no dedicated command: the official app recalculates the
+    value of `m` (preserving heat/cool and the air state) and sends it with
+    the same `mode` command that `climate.py` uses
+    (`toggleRadiatingFloor`/`setModeHeat`, see docs/protocol-findings.md §4).
     """
 
     _attr_has_entity_name = True
@@ -155,10 +155,10 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self.device_id = device_id
         self._attr_unique_id = f"mysair_floor_{inst_ref}_{device_id}"
         self._attr_device_info = zone_device_info(inst_ref, device_id, name)
-        self._zone_name = name  # solo para logs
+        self._zone_name = name  # for logging only
         self._is_on = False
         self._allow_floor = False
-        # Estado actual conocido para preservarlo al recalcular 'm'.
+        # Current known state, preserved when recalculating 'm'.
         self._current_is_heat = True
         self._current_is_ac = True
         self._current_temp_target = 22.0
@@ -172,10 +172,10 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
 
     @property
     def available(self):
-        # El suelo radiante no es una capacidad universal (a diferencia del
-        # power on/off): la entidad existe siempre, pero se marca "no
-        # disponible" para zonas sin capacidad de suelo, igual que el resto
-        # de entidades ya están "no disponibles" hasta el primer status.
+        # Floor heating is not a universal capability (unlike power on/off):
+        # the entity always exists but is marked "unavailable" for zones
+        # without floor heating, just as all entities are "unavailable"
+        # until the first status arrives.
         return super().available and self._allow_floor
 
     async def async_turn_on(self, **kwargs):
@@ -191,7 +191,7 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
                 self._current_is_heat, self._current_is_ac, floor_on
             )
             _LOGGER.debug(
-                f"[MySair Switch] 🌡️ Cambiando suelo a {'ON' if floor_on else 'OFF'} en {self.name} (m={new_mode})"
+                f"[MySair Switch] Setting floor heating {'ON' if floor_on else 'OFF'} on {self.name} (m={new_mode})"
             )
             response = await self.hass.async_add_executor_job(
                 self.api.send_zone_command,
@@ -210,7 +210,7 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error(
-                f"[MySair Switch] ❌ Error al cambiar el suelo de {self.name}: {e}"
+                f"[MySair Switch] Failed to change floor heating of {self.name}: {e}"
             )
 
     async def async_added_to_hass(self):
@@ -241,6 +241,6 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         if zone.get("temp_target") is not None:
             self._current_temp_target = zone.get("temp_target")
         _LOGGER.debug(
-            f"[MySair Switch] 🔄 Suelo {self.name}: {'ON' if self._is_on else 'OFF'}"
+            f"[MySair Switch] Floor heating {self.name}: {'ON' if self._is_on else 'OFF'}"
         )
         self.async_write_ha_state()

@@ -1,7 +1,8 @@
-"""Smoke test P2: valida que el harness de Home Assistant descubre custom_components/mysair.
+"""P2 smoke test: checks that the Home Assistant harness discovers custom_components/mysair.
 
-Solo corre con pytest-homeassistant-custom-component instalado (ver Dockerfile.test);
-en el entorno P0/P1 sin HA se salta (pytest.importorskip).
+Only runs with pytest-homeassistant-custom-component installed (see
+Dockerfile.test); skipped in the P0/P1 environment without HA
+(pytest.importorskip).
 """
 
 import pytest

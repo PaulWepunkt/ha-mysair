@@ -1,9 +1,9 @@
-"""Tests P2 del coordinador de zona (C1, harness de Home Assistant).
+"""P2 tests of the zone coordinator (C1, Home Assistant harness).
 
-Cubre `MySairCoordinator` en aislamiento: filtrado por instalación propia,
-redistribución por zona vía dispatcher, y desuscripción en `stop()`. El
-comportamiento observable end-to-end (entidades reaccionando a `mysair_update`)
-ya está cubierto por test_entities.py y no cambia con este refactor.
+Covers `MySairCoordinator` in isolation: filtering by own installation,
+per-zone dispatch via the dispatcher, and unsubscribing in `stop()`. The
+observable end-to-end behaviour (entities reacting to `mysair_update`) is
+already covered by test_entities.py.
 """
 
 import pytest

@@ -1,4 +1,4 @@
-"""Tests P1 del cliente HTTP MySairAPI con una sesión inyectada (sin red)."""
+"""P1 tests of the MySairAPI HTTP client with an injected session (no network)."""
 
 import pytest
 
@@ -103,12 +103,12 @@ def test_refresh_tokens_backend_error_raises_connection_error(
 
 
 def test_refresh_tokens_revoked_token_raises_auth_error(fake_session, make_response):
-    """Regresión del incidente del 2026-09-11.
+    """Regression test: a 404 on token refresh must request reauth.
 
-    MySair corre sobre Laravel Passport, que responde **404** (no 401) cuando
-    el refresh_token ya no existe en servidor. Se clasificaba como error de
-    conexión → ConfigEntryNotReady → Home Assistant reintentaba en bucle sin
-    ofrecer nunca el reauth, y la única salida era desinstalar la integración.
+    MySair runs on Laravel Passport, which answers **404** (not 401) when the
+    refresh_token no longer exists on the server. It used to be classified as
+    a connection error → ConfigEntryNotReady → Home Assistant retried in a loop
+    without ever offering reauth, and the only way out was reinstalling.
     """
     fake_session.queue(
         "put",
@@ -124,7 +124,7 @@ def test_refresh_tokens_revoked_token_raises_auth_error(fake_session, make_respo
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
 def test_client_errors_classified_as_auth(fake_session, make_response, status):
-    """Un 4xx en un endpoint de sesión significa siempre 'pide credenciales'."""
+    """A 4xx on a session endpoint always means 'ask for credentials'."""
     fake_session.queue("put", make_response(status, {}, "nope"))
     api = _api(fake_session)
     api.refresh_token_value = "OLD_REFRESH"
@@ -134,7 +134,7 @@ def test_client_errors_classified_as_auth(fake_session, make_response, status):
 
 @pytest.mark.parametrize("status", [429, 500, 502, 503])
 def test_server_errors_classified_as_connection(fake_session, make_response, status):
-    """5xx y 429 son transitorios: reintentar sí tiene sentido."""
+    """5xx and 429 are transient: retrying makes sense."""
     fake_session.queue("put", make_response(status, {}, "boom"))
     api = _api(fake_session)
     api.refresh_token_value = "OLD_REFRESH"
@@ -162,7 +162,7 @@ def test_refresh_tokens_ok_notifies_callback(fake_session, make_response):
 
 
 def test_api_works_without_password():
-    # A6: la API debe poder construirse sin password (solo refresh_token en runtime).
+    # A6: the API must be constructible without a password (only refresh_token at runtime).
     api = MySairAPI("user@example.com")
     assert api.password is None
 
@@ -178,8 +178,8 @@ def test_get_locations_ok(fake_session, make_response):
 def test_get_locations_backend_error_raises_connection_error(
     fake_session, make_response
 ):
-    # Antes devolvía [] ante cualquier fallo, indistinguible de una cuenta
-    # vacía: el setup lo leía como "sin ubicaciones" y reintentaba en bucle.
+    # It used to return [] on any failure, indistinguishable from an empty
+    # account: setup read it as "no locations" and retried in a loop.
     fake_session.queue("get", make_response(500, {}, "err"))
     with pytest.raises(MySairConnectionError):
         _api(fake_session).get_locations()
@@ -194,7 +194,7 @@ def test_get_locations_dead_session_raises_auth_error(fake_session, make_respons
 def test_get_locations_retries_once_after_refreshing_tokens(
     fake_session, make_response, login_ok
 ):
-    # 401 aislado: el access_token caducó pero la sesión sigue viva.
+    # Single 401: the access_token expired but the session is still alive.
     fake_session.queue(
         "get",
         make_response(401, {}, "expired"),
@@ -283,9 +283,7 @@ def test_send_instruction_401_refreshes_and_retries(
 def test_send_instruction_401_without_refresh_token_raises(fake_session, make_response):
     fake_session.queue("post", make_response(401, {}))
     api = _api(fake_session)
-    api.refresh_token_value = (
-        None  # refresh_tokens() lanza MySairAuthError → sin reintento
-    )
+    api.refresh_token_value = None  # refresh_tokens() raises MySairAuthError → no retry
     with pytest.raises(Exception):
         api.send_instruction([{"command": "x"}])
 
@@ -300,7 +298,7 @@ def test_send_zone_command_mode(fake_session, make_response):
     assert body == {
         "sender": "WEB",
         "ctl": "INST",
-        "app": "web0077",  # sin aws_credentials → fallback
+        "app": "web0077",  # no aws_credentials → fallback
         "device": "DEV",
         "command": "mode",
         "value": {"mode": "0", "temperature": "21.0"},
@@ -381,7 +379,7 @@ def test_send_installation_command_missing_ctl_raises(fake_session):
         _api(fake_session).send_installation_command("", "stop")
 
 
-# --- extract_order_id (E7, confirmación de comandos) ---
+# --- extract_order_id (E7, command confirmation) ---
 
 
 def test_extract_order_id_ok():

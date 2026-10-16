@@ -1,8 +1,8 @@
-"""Diagnostics de la integración MySair (D1).
+"""Diagnostics for the MySair integration (D1).
 
-Vuelca el estado en memoria (config entry, sesión API, credenciales AWS,
-estado del cliente MQTT) para depuración desde la UI de Home Assistant,
-redactando cualquier credencial o token antes de exponerlo.
+Dumps the in-memory state (config entry, API session, AWS credentials, MQTT
+client state) for debugging from the Home Assistant UI, redacting any
+credential or token before exposing it.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ TO_REDACT_API = {
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Genera el volcado de diagnóstico para una config entry de MySair."""
+    """Build the diagnostics dump for a MySair config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
     api = data["api"]
     mqtt_client = data["mqtt"]

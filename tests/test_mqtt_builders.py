@@ -1,7 +1,7 @@
-"""Tests P0 de los constructores de paquetes MQTT (sin Home Assistant).
+"""P0 tests of the MQTT packet builders (no Home Assistant).
 
-Requiere que `websocket-client` esté instalado (mqtt_handler lo importa a nivel
-de módulo); si no lo está, se omiten.
+Requires `websocket-client` (imported at module level by mqtt_handler);
+skipped if it is not installed.
 """
 
 import struct
@@ -33,7 +33,7 @@ def test_build_mqtt_connect_structure():
     assert pkt[0:1] == b"\x10"
     # Cabecera variable: nombre de protocolo MQTT v3.1.1, flags 0xC2, keepalive 60
     assert b"\x00\x04MQTT\x04\xc2" + struct.pack("!H", 60) in pkt
-    # Campos del payload con prefijo de longitud
+    # Length-prefixed payload fields
     assert struct.pack("!H", 3) + b"cid" in pkt
     assert struct.pack("!H", 3) + b"usr" in pkt
     assert struct.pack("!H", 3) + b"pwd" in pkt
@@ -43,18 +43,18 @@ def test_build_mqtt_connect_remaining_length():
     pkt = build_mqtt_connect("a", "b", "c")
     remaining = encode_varint(
         len(pkt) - 2
-    )  # total menos el fixed header (0x10 + 1 byte len)
+    )  # total minus the fixed header (0x10 + 1 length byte)
     assert pkt[1:2] == remaining
 
 
 def test_build_mqtt_subscribe_structure():
     topic = "pro/v1/get/ctl/INST_A/#"
     pkt = build_mqtt_subscribe(1, topic)
-    # Tipo SUBSCRIBE (0x82 incluye el flag obligatorio 0x02)
+    # SUBSCRIBE type (0x82 includes the mandatory 0x02 flag)
     assert pkt[0:1] == b"\x82"
     # packet_id
     assert struct.pack("!H", 1) in pkt
-    # topic con prefijo de longitud y QoS 0 al final
+    # length-prefixed topic with QoS 0 at the end
     assert struct.pack("!H", len(topic)) + topic.encode() + b"\x00" in pkt
     assert pkt[-1:] == b"\x00"  # QoS 0
 

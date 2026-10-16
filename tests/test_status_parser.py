@@ -1,8 +1,8 @@
-"""Tests P0 del parser puro de mensajes 'status' (sin Home Assistant).
+"""P0 tests of the pure 'status' message parser (no Home Assistant).
 
-Semántica confirmada desde la app oficial (docs/protocol-findings.md):
-  - e = encendido: "0"=off, "1"=on, "2"=standby
-  - m = modo 0-5: par=calor, impar=frío; {0,1,4,5}=AC, {2,3,4,5}=suelo
+Semantics confirmed from the official app (docs/protocol-findings.md):
+  - e = power: "0"=off, "1"=on, "2"=standby
+  - m = mode 0-5: even=heat, odd=cool; {0,1,4,5}=air, {2,3,4,5}=floor
 """
 
 import pytest
@@ -51,13 +51,13 @@ def test_parse_status_value_json_non_object_returns_empty():
 @pytest.mark.parametrize(
     "m,expected",
     [
-        ("0", ("0", True, False, True, False)),  # AC calor
-        ("1", ("1", False, True, True, False)),  # AC frío
-        ("2", ("2", True, False, False, True)),  # suelo calor
-        ("3", ("3", False, True, False, True)),  # suelo frío
-        ("4", ("4", True, False, True, True)),  # AC+suelo calor
-        ("5", ("5", False, True, True, True)),  # AC+suelo frío
-        (0, ("0", True, False, True, False)),  # int también válido
+        ("0", ("0", True, False, True, False)),  # air heat
+        ("1", ("1", False, True, True, False)),  # air cool
+        ("2", ("2", True, False, False, True)),  # floor heat
+        ("3", ("3", False, True, False, True)),  # floor cool
+        ("4", ("4", True, False, True, True)),  # air+floor heat
+        ("5", ("5", False, True, True, True)),  # air+floor cool
+        (0, ("0", True, False, True, False)),  # int is valid too
     ],
 )
 def test_parse_mode_values(m, expected):
@@ -78,12 +78,12 @@ def test_parse_mode_non_numeric():
 @pytest.mark.parametrize(
     "is_heat,is_ac,is_floor,expected",
     [
-        (True, True, False, "0"),  # AC calor
-        (False, True, False, "1"),  # AC frío
-        (True, False, True, "2"),  # suelo calor
-        (False, False, True, "3"),  # suelo frío
-        (True, True, True, "4"),  # AC+suelo calor
-        (False, True, True, "5"),  # AC+suelo frío
+        (True, True, False, "0"),  # air heat
+        (False, True, False, "1"),  # air cool
+        (True, False, True, "2"),  # floor heat
+        (False, False, True, "3"),  # floor cool
+        (True, True, True, "4"),  # air+floor heat
+        (False, True, True, "5"),  # air+floor cool
     ],
 )
 def test_compute_mode_value_matches_confirmed_table(is_heat, is_ac, is_floor, expected):
@@ -97,8 +97,8 @@ def test_compute_mode_value_roundtrips_with_parse_mode():
 
 
 def test_compute_mode_value_forces_ac_when_neither_medium_active():
-    # Combinación que la app nunca genera: se fuerza AC=True en vez de
-    # enviar un 'm' nunca visto en el bundle.
+    # Combination the app never produces: air is forced on instead of
+    # sending an 'm' value never seen in the bundle.
     assert compute_mode_value(is_heat=True, is_ac=False, is_floor=False) == "0"
 
 
@@ -147,7 +147,7 @@ def test_parse_status_payload_power_field(e, is_on, is_standby):
 
 
 def test_parse_status_payload_cool_mode():
-    # m=1 (AC frío), encendido
+    # m=1 (air cool), on
     payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"1","m":"1"}]}'}
     zone = parse_status_payload(payload)["zones"][0]
     assert zone["is_on"] is True
@@ -156,7 +156,7 @@ def test_parse_status_payload_cool_mode():
 
 
 def test_parse_status_payload_off_keeps_mode_field():
-    # apagado (e="0") pero m sigue presente: is_on False, y m interpretable
+    # off (e="0") but m still present: is_on False, m still interpretable
     payload = {"ctl": "X", "value": '{"t":[{"rf":"D","e":"0","m":"1"}]}'}
     zone = parse_status_payload(payload)["zones"][0]
     assert zone["is_on"] is False
@@ -258,15 +258,15 @@ def test_parse_status_payload_missing_value():
 
 
 def test_parse_status_payload_non_dict_input():
-    # E4: un payload que no es ni siquiera un dict se rechaza (None), en vez
-    # de devolver un dict "vacío" que de todas formas no hace nada aguas abajo.
+    # E4: a payload that is not even a dict is rejected (None) instead of
+    # returning an "empty" dict that does nothing downstream anyway.
     assert parse_status_payload(None) is None
 
 
 def test_parse_status_payload_non_dict_input_logs_warning(caplog):
     caplog.set_level("WARNING")
     parse_status_payload(None)
-    assert "no es un dict" in caplog.text
+    assert "is not a dict" in caplog.text
 
 
 def test_parse_status_payload_t_not_a_list_logs_warning_and_yields_no_zones(caplog):
@@ -276,7 +276,7 @@ def test_parse_status_payload_t_not_a_list_logs_warning_and_yields_no_zones(capl
     result = parse_status_payload(payload)
 
     assert result == {"ctl": "X", "zones": []}
-    assert "campo 't' con forma inesperada" in caplog.text
+    assert "field 't' has an unexpected shape" in caplog.text
 
 
 def test_parse_status_payload_missing_ctl_logs_warning(caplog):
@@ -286,7 +286,7 @@ def test_parse_status_payload_missing_ctl_logs_warning(caplog):
     result = parse_status_payload(payload)
 
     assert result["ctl"] is None
-    assert "sin 'ctl'" in caplog.text
+    assert "without 'ctl'" in caplog.text
 
 
 def test_parse_status_payload_zone_missing_rf_logs_warning(caplog):
@@ -297,7 +297,7 @@ def test_parse_status_payload_zone_missing_rf_logs_warning(caplog):
 
     assert len(zones) == 1
     assert zones[0]["zone_id"] is None
-    assert "zona sin 'rf'" in caplog.text
+    assert "zone without 'rf'" in caplog.text
 
 
 def test_parse_status_payload_skips_non_dict_thermostats():
@@ -333,14 +333,14 @@ def test_parse_feedback_payload_missing_fields():
 
 
 def test_parse_feedback_payload_non_dict_input():
-    # E4: rechazado (None) en vez de un dict con raw preservado.
+    # E4: rejected (None) instead of a dict with raw preserved.
     assert parse_feedback_payload("not-a-dict") is None
 
 
 def test_parse_feedback_payload_non_dict_input_logs_warning(caplog):
     caplog.set_level("WARNING")
     parse_feedback_payload("not-a-dict")
-    assert "no es un dict" in caplog.text
+    assert "is not a dict" in caplog.text
 
 
 def test_parse_feedback_payload_missing_order_id_and_ctl_logs_warning(caplog):
@@ -348,4 +348,4 @@ def test_parse_feedback_payload_missing_order_id_and_ctl_logs_warning(caplog):
     result = parse_feedback_payload({"unrelated": "field"})
 
     assert result == {"order_id": None, "ctl": None, "raw": {"unrelated": "field"}}
-    assert "no se encontró" in caplog.text
+    assert "neither 'orderId' nor 'ctl' found" in caplog.text

@@ -1,12 +1,11 @@
-"""Información de dispositivo compartida por las entidades de una zona.
+"""Device information shared by all entities of a zone.
 
-Las 7 entidades de una zona (climate, 4 sensores, 2 switches) pertenecen al
-mismo dispositivo y repetían el mismo bloque ``device_info`` palabra por
-palabra. Además, desde que las entidades usan ``has_entity_name`` el nombre
-del dispositivo dejó de ser decorativo: Home Assistant lo antepone al nombre
-de cada entidad para componer tanto el nombre visible como el ``entity_id``,
-así que tiene que ser el nombre de la zona ("Salón") y no un identificador
-interno.
+The 7 entities of a zone (climate, 4 sensors, 2 switches) belong to the same
+device and used to repeat the same ``device_info`` block word for word.
+Since the entities use ``has_entity_name``, the device name is no longer
+decorative: Home Assistant prepends it to each entity name to build both the
+visible name and the ``entity_id``, so it has to be the zone name ("Living
+room") rather than an internal identifier.
 """
 
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -15,13 +14,12 @@ from .const import DOMAIN
 
 
 def zone_device_info(inst_ref: str, device_id: str, zone_name: str) -> DeviceInfo:
-    """Dispositivo que agrupa todas las entidades de una zona.
+    """Device grouping all entities of a zone.
 
-    ``identifiers`` se mantiene igual que antes
-    (``{(DOMAIN, f"{inst_ref}_{device_id}")}``): es la clave con la que
-    Home Assistant reconoce dispositivos ya registrados, y también la que
-    usa ``_cleanup_stale_zone_devices`` (``__init__.py``) para detectar
-    zonas que han desaparecido de la cuenta.
+    ``identifiers`` is unchanged (``{(DOMAIN, f"{inst_ref}_{device_id}")}``):
+    it is the key Home Assistant uses to recognise already registered
+    devices, and also the one ``_cleanup_stale_zone_devices``
+    (``__init__.py``) uses to detect zones that disappeared from the account.
     """
     return DeviceInfo(
         identifiers={(DOMAIN, f"{inst_ref}_{device_id}")},
@@ -32,11 +30,12 @@ def zone_device_info(inst_ref: str, device_id: str, zone_name: str) -> DeviceInf
 
 
 def account_device_info(entry_id: str) -> DeviceInfo:
-    """Dispositivo "de cuenta", que agrupa lo que no pertenece a una zona.
+    """Account-level device grouping everything that does not belong to a zone.
 
-    Hoy solo el sensor de conexión MQTT. Se identifica por ``entry_id``, no
-    por una referencia de instalación, y ``_cleanup_stale_zone_devices`` lo
-    reconoce por eso para no borrarlo nunca como si fuera una zona huérfana.
+    Currently only the cloud connection sensor. It is identified by
+    ``entry_id`` instead of an installation reference, which is how
+    ``_cleanup_stale_zone_devices`` recognises it and never removes it as an
+    orphaned zone.
     """
     return DeviceInfo(
         identifiers={(DOMAIN, entry_id)},

@@ -1,8 +1,8 @@
-"""Tests P2 de entidades y eventos MQTT (harness de Home Assistant, ver Dockerfile.test).
+"""P2 tests of entities and MQTT events (Home Assistant harness, see Dockerfile.test).
 
-Cubre climate/sensor/switch reaccionando a `mysair_update` y enviando comandos
-vía `send_zone_command`. Sin red real: MySairAPI y MySairMQTTClient van
-parcheados (igual que en test_init_setup_unload.py).
+Covers climate/sensor/switch reacting to `mysair_update` and sending commands
+via `send_zone_command`. No real network: MySairAPI and MySairMQTTClient are
+patched (as in test_init_setup_unload.py).
 """
 
 import logging
@@ -200,7 +200,7 @@ async def test_mode_sensor_medium_attribute(
 
 
 async def test_mode_sensor_medium_persists_while_off(hass, monkeypatch):
-    # 'm' (y por tanto el medio) se conserva aunque la zona esté apagada.
+    # 'm' (and therefore the medium) is kept while the zone is off.
     await _setup_entry(hass, monkeypatch)
 
     _fire_status(hass, "INST_A", _zone(is_on=False, is_ac=True, is_floor=True))
@@ -233,9 +233,9 @@ async def test_event_from_other_installation_is_ignored(hass, monkeypatch):
 
 
 async def test_malformed_status_payload_does_not_fire_update_event(hass, monkeypatch):
-    # E4: mqtt_message_callback (__init__.py) rechaza (no dispara
-    # mysair_update) cuando parse_status_payload devuelve None por recibir
-    # un payload que no es ni siquiera un dict.
+    # E4: mqtt_message_callback (__init__.py) rejects (does not fire
+    # mysair_update) when parse_status_payload returns None because the
+    # payload is not even a dict.
     entry = await _setup_entry(hass, monkeypatch)
     mqtt_client = hass.data[DOMAIN][entry.entry_id]["mqtt"]
 
@@ -253,7 +253,7 @@ async def test_malformed_status_payload_does_not_fire_update_event(hass, monkeyp
 async def test_climate_set_hvac_mode_sends_command(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    # C5: la entidad está "no disponible" hasta el primer status MQTT.
+    # C5: the entity is "unavailable" until the first MQTT status.
     _fire_status(hass, "INST_A", _zone())
     await hass.async_block_till_done()
 
@@ -281,7 +281,7 @@ async def test_climate_set_temperature_while_off_does_not_send_command(
 ):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    # C5: la entidad está "no disponible" hasta el primer status MQTT.
+    # C5: the entity is "unavailable" until the first MQTT status.
     _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
     assert hass.states.get("climate.salon").state == HVACMode.OFF
@@ -300,7 +300,7 @@ async def test_climate_set_temperature_while_off_does_not_send_command(
 async def test_switch_turn_on_off_sends_commands(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    # C5: la entidad está "no disponible" hasta el primer status MQTT.
+    # C5: the entity is "unavailable" until the first MQTT status.
     _fire_status(hass, "INST_A", _zone())
     await hass.async_block_till_done()
 
@@ -333,7 +333,7 @@ async def test_switch_preserves_last_ac_mode_from_mqtt(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
 
-    # El estado real llega por MQTT en modo frío ("1"); al reencender debe preservarlo.
+    # The real state arrives over MQTT in cool mode ("1"); turning on again must preserve it.
     _fire_status(
         hass,
         "INST_A",
@@ -348,7 +348,7 @@ async def test_switch_preserves_last_ac_mode_from_mqtt(hass, monkeypatch):
     assert calls[-1]["value"] == "1"
 
 
-# --- Control de suelo radiante (F4) ---
+# --- Floor heating control (F4) ---
 
 
 async def test_floor_switch_unavailable_without_capability(hass, monkeypatch):
@@ -379,7 +379,7 @@ async def test_floor_switch_available_and_reflects_state_with_capability(
 async def test_floor_switch_turn_on_preserves_heat_cool_and_ac(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    # Zona en AC-only frío (m="1"): activar suelo debe pasar a AC+suelo frío (m="5").
+    # Zone in air-only cool (m="1"): enabling floor must switch to air+floor cool (m="5").
     _fire_status(
         hass,
         "INST_A",
@@ -412,7 +412,7 @@ async def test_floor_switch_turn_on_preserves_heat_cool_and_ac(hass, monkeypatch
 async def test_floor_switch_turn_off_preserves_heat_cool_and_ac(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    # AC+suelo calor (m="4"): apagar suelo debe volver a AC-only calor ("0").
+    # Air+floor heat (m="4"): disabling floor must return to air-only heat ("0").
     _fire_status(
         hass,
         "INST_A",
@@ -456,7 +456,7 @@ async def test_humidity_sensor_updates_from_mqtt_event(hass, monkeypatch):
 
 async def test_climate_min_max_temp_from_status(hass, monkeypatch):
     await _setup_entry(hass, monkeypatch)
-    # Antes del primer status: valores por defecto (10-30).
+    # Before the first status: default values (10-30).
     assert hass.states.get("climate.salon").attributes["min_temp"] == 10
     assert hass.states.get("climate.salon").attributes["max_temp"] == 30
 
@@ -470,14 +470,14 @@ async def test_climate_min_max_temp_from_status(hass, monkeypatch):
 
 async def test_climate_hvac_modes_restricted_by_capabilities(hass, monkeypatch):
     await _setup_entry(hass, monkeypatch)
-    # Antes del primer status: los 3 modos por defecto.
+    # Before the first status: the 3 default modes.
     assert set(hass.states.get("climate.salon").attributes["hvac_modes"]) == {
         HVACMode.OFF,
         HVACMode.HEAT,
         HVACMode.COOL,
     }
 
-    # Zona que solo permite calor (allow_cool=False, p. ej. sin bomba de frío).
+    # Zone that only allows heat (allow_cool=False, e.g. no cooling unit).
     _fire_status(hass, "INST_A", _zone(allow_heat=True, allow_cool=False))
     await hass.async_block_till_done()
 
@@ -493,9 +493,9 @@ async def test_climate_set_hvac_mode_rejected_when_not_allowed(hass, monkeypatch
     _fire_status(hass, "INST_A", _zone(allow_heat=True, allow_cool=False))
     await hass.async_block_till_done()
 
-    # Home Assistant valida el modo contra hvac_modes antes de llamar a la
-    # entidad y rechaza la llamada; el guard propio de climate.py sigue
-    # protegiendo el camino interno (async_turn_on).
+    # Home Assistant validates the mode against hvac_modes before calling the
+    # entity and rejects the call; the guard in climate.py still protects the
+    # internal path (async_turn_on).
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             "climate",
@@ -508,7 +508,7 @@ async def test_climate_set_hvac_mode_rejected_when_not_allowed(hass, monkeypatch
     assert hass.states.get("climate.salon").state != "cool"
 
 
-# --- Confirmación de comandos vía feedback (E7, docs/protocol-findings.md §8) ---
+# --- Command confirmation via feedback (E7, docs/protocol-findings.md §8) ---
 
 
 async def test_climate_command_confirmed_via_feedback(hass, monkeypatch, caplog):
@@ -531,7 +531,7 @@ async def test_climate_command_confirmed_via_feedback(hass, monkeypatch, caplog)
     )
     await hass.async_block_till_done()
 
-    assert "Comando confirmado" in caplog.text
+    assert "Command confirmed" in caplog.text
 
 
 async def test_climate_command_feedback_from_other_installation_ignored(
@@ -556,15 +556,14 @@ async def test_climate_command_feedback_from_other_installation_ignored(
     )
     await hass.async_block_till_done()
 
-    assert "Comando confirmado" not in caplog.text
+    assert "Command confirmed" not in caplog.text
 
 
 async def test_climate_command_timeout_logs_warning_when_mqtt_disconnected(
     hass, monkeypatch, caplog
 ):
-    # MySairMQTTClient.start está parcheado a no-op: mqtt_client.connected
-    # se queda en False, como si el MQTT estuviera caído (causa real
-    # confirmada en producción de este aviso).
+    # MySairMQTTClient.start is patched to a no-op: mqtt_client.connected
+    # stays False, as if MQTT were down (a real cause of this warning).
     caplog.set_level(logging.INFO)
     calls = []
     entry = await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
@@ -586,8 +585,8 @@ async def test_climate_command_timeout_logs_warning_when_mqtt_disconnected(
     async_fire_time_changed(hass, future)
     await hass.async_block_till_done()
 
-    assert "Sin confirmación MQTT" in caplog.text
-    assert "MQTT desconectado" in caplog.text
+    assert "No MQTT confirmation" in caplog.text
+    assert "MQTT was disconnected" in caplog.text
 
 
 async def test_climate_command_timeout_logs_warning_when_mqtt_connected(
@@ -614,8 +613,8 @@ async def test_climate_command_timeout_logs_warning_when_mqtt_connected(
     async_fire_time_changed(hass, future)
     await hass.async_block_till_done()
 
-    assert "Sin confirmación MQTT" in caplog.text
-    assert "con MQTT activo" in caplog.text
+    assert "No MQTT confirmation" in caplog.text
+    assert "with MQTT connected" in caplog.text
 
 
 async def test_switch_command_confirmed_via_feedback(hass, monkeypatch, caplog):
@@ -635,10 +634,10 @@ async def test_switch_command_confirmed_via_feedback(hass, monkeypatch, caplog):
     )
     await hass.async_block_till_done()
 
-    assert "Comando confirmado" in caplog.text
+    assert "Command confirmed" in caplog.text
 
 
-# --- Disponibilidad por frescura de datos MQTT (C5) ---
+# --- Availability based on MQTT data freshness (C5) ---
 
 
 async def test_entities_unavailable_until_first_status(hass, monkeypatch):
@@ -668,10 +667,10 @@ async def test_availability_mixin_disables_polling():
 
 
 async def test_entities_become_unavailable_after_stale_timeout(hass, monkeypatch):
-    # `available` vuelve a llamar a dt_util.utcnow() al evaluarse; para que la
-    # comprobación de caducidad dé positivo hace falta congelar el reloj real
-    # (async_fire_time_changed solo dispara el callback programado, no mueve
-    # el reloj que `available` lee de forma independiente).
+    # `available` calls dt_util.utcnow() again when evaluated; for the expiry
+    # check to be positive the real clock has to be frozen
+    # (async_fire_time_changed only fires the scheduled callback, it does not
+    # move the clock that `available` reads independently).
     freezegun = pytest.importorskip("freezegun")
     from custom_components.mysair.const import MQTT_STALE_AFTER_SECONDS
 
@@ -755,10 +754,9 @@ async def test_climate_set_fan_mode_sends_command(hass, monkeypatch):
 
 
 async def test_climate_set_fan_mode_rejected_when_not_allowed(hass, monkeypatch):
-    # A diferencia de hvac_mode (que en esta versión de HA solo avisa), la
-    # validación de fan_mode sí rechaza con ServiceValidationError a nivel de
-    # servicio si fan_modes está vacío: la llamada ni siquiera llega a
-    # climate.async_set_fan_mode.
+    # Unlike hvac_mode (which only warns in this HA version), fan_mode
+    # validation does reject with ServiceValidationError at service level when
+    # fan_modes is empty: the call never reaches climate.async_set_fan_mode.
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(hass, "INST_A", _zone(allow_fan=False))
@@ -775,7 +773,7 @@ async def test_climate_set_fan_mode_rejected_when_not_allowed(hass, monkeypatch)
     assert calls == []
 
 
-# --- E7 parte 2: revertir estado optimista si no llega confirmación ---
+# --- E7 part 2: revert the optimistic state if no confirmation arrives ---
 
 
 async def test_climate_hvac_mode_reverts_on_timeout(hass, monkeypatch):
@@ -799,7 +797,7 @@ async def test_climate_hvac_mode_reverts_on_timeout(hass, monkeypatch):
     async_fire_time_changed(hass, future)
     await hass.async_block_till_done()
 
-    assert hass.states.get("climate.salon").state == HVACMode.HEAT  # revertido
+    assert hass.states.get("climate.salon").state == HVACMode.HEAT  # reverted
 
 
 async def test_climate_temperature_reverts_on_timeout(hass, monkeypatch):
@@ -866,8 +864,8 @@ async def test_switch_reverts_on_timeout(hass, monkeypatch):
 
 
 async def test_climate_pending_revert_cleared_by_real_status(hass, monkeypatch):
-    # Si llega un status real antes del timeout, se descarta el revert
-    # pendiente: el dato fresco manda, no hay que volver a un valor viejo.
+    # If a real status arrives before the timeout, the pending revert is
+    # discarded: the fresh data wins, there is no going back to an old value.
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(
@@ -883,7 +881,7 @@ async def test_climate_pending_revert_cleared_by_real_status(hass, monkeypatch):
     )
     assert hass.states.get("climate.salon").state == HVACMode.COOL
 
-    # Llega un status real confirmando el cambio (verdad fresca).
+    # A real status arrives confirming the change (fresh truth).
     _fire_status(
         hass, "INST_A", _zone(is_on=True, is_heat=False, is_cool=True, mode_raw="1")
     )
@@ -894,7 +892,7 @@ async def test_climate_pending_revert_cleared_by_real_status(hass, monkeypatch):
     async_fire_time_changed(hass, future)
     await hass.async_block_till_done()
 
-    # Sigue en COOL: no se revierte, el pending ya se limpió con el status real.
+    # Still COOL: no revert, the pending command was cleared by the real status.
     assert hass.states.get("climate.salon").state == HVACMode.COOL
 
 
@@ -927,10 +925,10 @@ async def test_mqtt_status_sensor_reflects_connection_state(hass, monkeypatch):
 
 
 async def test_climate_turn_on_uses_only_allowed_mode(hass, monkeypatch):
-    """En una zona que solo enfría, turn_on debe encender en frío.
+    """In a cool-only zone, turn_on must turn on in cool mode.
 
-    Antes caía siempre a HVACMode.HEAT sin mirar las capacidades, el guard de
-    async_set_hvac_mode lo rechazaba y la llamada no hacía nada en silencio.
+    It used to always fall back to HVACMode.HEAT without checking capabilities;
+    the async_set_hvac_mode guard rejected it and the call silently did nothing.
     """
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
@@ -944,7 +942,7 @@ async def test_climate_turn_on_uses_only_allowed_mode(hass, monkeypatch):
     await hass.async_block_till_done()
 
     assert [c["command_type"] for c in calls] == ["mode"]
-    assert calls[0]["value"] == "1"  # 1 = frío
+    assert calls[0]["value"] == "1"  # 1 = cool
     assert hass.states.get("climate.salon").state == HVACMode.COOL
 
 
@@ -960,7 +958,7 @@ async def test_climate_turn_on_still_prefers_heat_when_both_allowed(hass, monkey
     )
     await hass.async_block_till_done()
 
-    assert calls[0]["value"] == "0"  # 0 = calor
+    assert calls[0]["value"] == "0"  # 0 = heat
 
 
 async def test_entity_names_follow_ha_language(hass, monkeypatch):

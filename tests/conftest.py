@@ -1,10 +1,10 @@
-"""Fixtures y utilidades compartidas para los tests que no requieren Home Assistant.
+"""Shared fixtures and helpers for the tests that do not need Home Assistant.
 
-Inserta ``custom_components/mysair`` en sys.path para poder importar los módulos
-puros (status_parser, api, mqtt_handler) COMO módulos de nivel superior, es decir
-sin ejecutar el ``__init__.py`` del paquete (que depende de homeassistant).
-Esto funciona porque esos módulos no tienen imports relativos.
-Todos los datos de fixtures están SANITIZADOS (valores ficticios, sin secretos).
+Inserts ``custom_components/mysair`` into sys.path so the pure modules
+(status_parser, api, mqtt_handler) can be imported AS top-level modules,
+i.e. without running the package ``__init__.py`` (which depends on
+homeassistant). This works because those modules have no relative imports.
+All fixture data is SANITISED (fictitious values, no secrets).
 """
 
 import os
@@ -12,12 +12,12 @@ import sys
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "custom_components", "mysair"))
-# Necesario para que el harness de HA (Docker) pueda hacer `import
-# custom_components` como paquete namespace y descubrir `custom_components/mysair`
-# (ver homeassistant.loader._get_custom_components).
+# Needed so the HA harness (Docker) can `import custom_components` as a
+# namespace package and discover `custom_components/mysair`
+# (see homeassistant.loader._get_custom_components).
 sys.path.insert(0, _REPO_ROOT)
 
-import pytest  # noqa: E402 (deliberado: necesita sys.path ya modificado, ver arriba)
+import pytest  # noqa: E402 (deliberate: needs the modified sys.path, see above)
 
 try:
     import pytest_homeassistant_custom_component  # noqa: F401
@@ -27,13 +27,13 @@ except ImportError:
     _HA_TEST_HARNESS_AVAILABLE = False
 
 if _HA_TEST_HARNESS_AVAILABLE:
-    # Solo se define cuando el harness de HA está instalado (Docker, ver
-    # Dockerfile.test). Al montar el fixture hass(), pytest-homeassistant-
-    # custom-component importa SU PROPIO paquete `custom_components` de
-    # prueba (un paquete regular, no namespace) y lo deja cacheado en
-    # sys.modules con __path__ apuntando solo a esa carpeta interna. Como
-    # __path__ es una lista mutable, añadimos nuestra carpeta real para que
-    # `homeassistant.loader` encuentre también custom_components/mysair.
+    # Only defined when the HA harness is installed (Docker, see
+    # Dockerfile.test). When the hass() fixture is set up,
+    # pytest-homeassistant-custom-component imports ITS OWN test
+    # `custom_components` package (a regular package, not a namespace one) and
+    # caches it in sys.modules with __path__ pointing only to that internal
+    # folder. Since __path__ is a mutable list, our real folder is appended so
+    # `homeassistant.loader` also finds custom_components/mysair.
     @pytest.fixture(autouse=True)
     def auto_enable_custom_integrations(hass, enable_custom_integrations):
         import custom_components as _test_custom_components
@@ -45,7 +45,7 @@ if _HA_TEST_HARNESS_AVAILABLE:
 
 
 class FakeResponse:
-    """Imitación mínima de requests.Response."""
+    """Minimal stand-in for requests.Response."""
 
     def __init__(self, status_code=200, json_data=None, text=""):
         self.status_code = status_code
@@ -57,9 +57,9 @@ class FakeResponse:
 
 
 class FakeSession:
-    """Sesión requests falsa: devuelve respuestas encoladas por método y registra llamadas.
+    """Fake requests session: returns queued responses per method and records calls.
 
-    Uso:
+    Usage:
         s = FakeSession()
         s.queue("post", FakeResponse(200, {...}))
         api = MySairAPI("e", "p", session=s)
@@ -83,7 +83,7 @@ class FakeSession:
         return queue.pop(0)
 
     def request(self, method, url, **kwargs):
-        """Entrada genérica que usa MySairAPI._authed_request."""
+        """Generic entry point used by MySairAPI._authed_request."""
         return self._handle(method.lower(), url, **kwargs)
 
     def get(self, url, **kwargs):
@@ -109,7 +109,7 @@ def fake_session():
     return FakeSession()
 
 
-# --- Payloads sanitizados (solo campos que el código realmente consume) ---
+# --- Sanitised payloads (only fields the code actually consumes) ---
 
 
 @pytest.fixture
@@ -133,10 +133,10 @@ def aws_credentials_ok():
 
 @pytest.fixture
 def status_payload():
-    """Payload MQTT 'status' con value como string JSON y ';' final (como en producción).
+    """MQTT 'status' payload with value as a JSON string and trailing ';' (as in production).
 
-    Campos (ver docs/protocol-findings.md): e=encendido, m=modo (0=AC calor),
-    tr/tc/tmm/tmx=temperaturas, c/f/v/s=capacidades.
+    Fields (see docs/protocol-findings.md): e=power, m=mode (0=air heat),
+    tr/tc/tmm/tmx=temperatures, c/f/v/s=capabilities.
     Humidity: "hum" reports "0" while "hm" holds the measured value
     (see status_parser.parse_humidity).
     """

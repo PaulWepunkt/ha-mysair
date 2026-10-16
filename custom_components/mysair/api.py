@@ -11,56 +11,55 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _truncate(text, limit=200):
-    """Limita la longitud de un cuerpo de respuesta antes de loguearlo (D2).
+    """Limit the length of a response body before logging it (D2).
 
-    Evita que un cuerpo de error inesperado del backend (p. ej. si alguna
-    vez refleja parte de la petición) filtre más de lo necesario en los logs.
+    Prevents an unexpected backend error body (e.g. one that echoes part of
+    the request) from leaking more than necessary into the logs.
     """
     text = str(text) if text is not None else ""
-    return text if len(text) <= limit else text[:limit] + "…(truncado)"
+    return text if len(text) <= limit else text[:limit] + "…(truncated)"
 
 
 class MySairAuthError(Exception):
-    """Credenciales o refresh_token inválidos/expirados: requiere reautenticación."""
+    """Invalid/expired credentials or refresh_token: reauthentication required."""
 
 
 class MySairConnectionError(Exception):
-    """Fallo de red o del backend, no relacionado con las credenciales."""
+    """Network or backend failure, unrelated to the credentials."""
 
 
 def _http_error(status_code, body, context):
-    """Clasifica una respuesta HTTP no-2xx como error de auth o de conexión.
+    """Classify a non-2xx HTTP response as an auth or a connection error.
 
-    Regla única para todos los endpoints, en vez de enumerar los códigos que
-    "se supone" que usa el backend. El incidente del 2026-09-11 vino justo de
-    eso: MySair corre sobre Laravel Passport, que responde **404** (no 401)
-    cuando el refresh_token ya no existe en servidor, con el cuerpo
-    ``No query results for model [Laravel\\Passport\\RefreshToken]``. Al
-    clasificarse como error de conexión acababa en ``ConfigEntryNotReady`` y
-    Home Assistant reintentaba en bucle sin ofrecer nunca el reauth.
+    A single rule for all endpoints instead of listing the codes the backend
+    is "supposed" to use. Listing codes is exactly what failed before: MySair
+    runs on Laravel Passport, which answers **404** (not 401) when the
+    refresh_token no longer exists on the server, with the body
+    ``No query results for model [Laravel\\Passport\\RefreshToken]``. Being
+    classified as a connection error, it ended in ``ConfigEntryNotReady`` and
+    Home Assistant retried in a loop without ever offering reauth.
 
-    - 5xx y 429: el backend está caído o nos limita → reintentar tiene sentido.
-    - Cualquier otro no-2xx (400, 401, 403, 404, …): las credenciales no
-      sirven → hay que preguntar al usuario.
+    - 5xx and 429: the backend is down or rate limiting → retrying makes sense.
+    - Any other non-2xx (400, 401, 403, 404, …): the credentials are not
+      valid → the user has to be asked.
 
-    Devuelve la excepción ya construida (el llamante hace ``raise``).
+    Returns the constructed exception (the caller raises it).
     """
     detail = f"{context}: {status_code} {_truncate(body)}"
     if status_code >= 500 or status_code == 429:
-        _LOGGER.error(f"[MySairAPI] ❌ {detail}")
+        _LOGGER.error(f"[MySairAPI] {detail}")
         return MySairConnectionError(detail)
-    _LOGGER.error(f"[MySairAPI] ❌ Sesión inválida — {detail}")
+    _LOGGER.error(f"[MySairAPI] Invalid session - {detail}")
     return MySairAuthError(detail)
 
 
 def extract_order_id(response):
-    """Extrae el ``orderId`` de la respuesta de ``POST /send/instruction``.
+    """Extract the ``orderId`` from the ``POST /send/instruction`` response.
 
-    Confirmado desde la app oficial (ver docs/protocol-findings.md §8):
-    ``entity.value[0].orderId``. Devuelve ``None`` si la forma no coincide
-    (respuesta inesperada) en vez de lanzar, ya que solo se usa para
-    correlacionar con el ACK MQTT — no es crítico para que el comando en sí
-    haya funcionado.
+    Confirmed from the official app (see docs/protocol-findings.md §8):
+    ``entity.value[0].orderId``. Returns ``None`` if the shape does not match
+    (unexpected response) instead of raising, since it is only used to
+    correlate with the MQTT ACK - it is not essential for the command itself.
     """
     if not isinstance(response, dict):
         return None
@@ -71,13 +70,13 @@ def extract_order_id(response):
 
 
 class MySairAPI:
-    """Cliente API para Mysair."""
+    """API client for MySair."""
 
-    # Expuesta como atributo de clase para que los consumidores que reciben una
-    # instancia de api (p. ej. MySairMQTTClient) puedan distinguir un fallo de
-    # sesión sin importar este módulo: `mqtt_handler` se importa como módulo de
-    # nivel superior en los tests P0/P1 y por eso no puede usar imports
-    # relativos (ver tests/conftest.py).
+    # Exposed as a class attribute so consumers that receive an api instance
+    # (e.g. MySairMQTTClient) can recognise a session failure without importing
+    # this module: `mqtt_handler` is imported as a top-level module in the
+    # P0/P1 tests and therefore cannot use relative imports (see
+    # tests/conftest.py).
     AuthError = MySairAuthError
 
     def __init__(
@@ -91,15 +90,15 @@ class MySairAPI:
         self.password = password
         self.base_url = "https://api.mysair.es/v1"
         self.access_token = None
-        self.refresh_token_value = None  # evitar conflicto con método
+        self.refresh_token_value = None  # avoids a clash with the method name
         self.entity = None
         self.aws_credentials = None
         self.lock = Lock()
-        # Sesión inyectable: facilita el mockeo en tests (ver docs/testing-strategy.md).
+        # Injectable session: makes mocking in tests easy (see docs/testing-strategy.md).
         self.session = session or requests.Session()
-        # Callback opcional (access_token, refresh_token) -> None, invocado tras
-        # login()/refresh_tokens(). El refresh_token rota en cada renovación, así
-        # que el llamador (p. ej. __init__.py) debe persistir el nuevo valor.
+        # Optional callback (access_token, refresh_token) -> None, invoked after
+        # login()/refresh_tokens(). The refresh_token rotates on every renewal,
+        # so the caller (e.g. __init__.py) must persist the new value.
         self.on_tokens_refreshed = on_tokens_refreshed
 
     def _notify_tokens(self):
@@ -107,18 +106,18 @@ class MySairAPI:
             try:
                 self.on_tokens_refreshed(self.access_token, self.refresh_token_value)
             except Exception:
-                _LOGGER.exception("[MySairAPI] ⚠️ Error notificando refresco de tokens")
+                _LOGGER.exception("[MySairAPI] Failed to notify token refresh")
 
     # ==========================================================
-    # 🔐 LOGIN
+    # LOGIN
     # ==========================================================
     def login(self):
-        """Autenticación inicial con la API Mysair (email + password).
+        """Initial authentication with the MySair API (email + password).
 
-        Lanza ``MySairAuthError`` si las credenciales son inválidas, o
-        ``MySairConnectionError`` ante fallos de red o del backend.
+        Raises ``MySairAuthError`` for invalid credentials, or
+        ``MySairConnectionError`` on network or backend failures.
         """
-        _LOGGER.info(f"[MySairAPI] 🔐 Login {self.email}")
+        _LOGGER.info(f"[MySairAPI] Login {self.email}")
         try:
             resp = self.session.post(
                 f"{self.base_url}/user/login",
@@ -126,8 +125,8 @@ class MySairAPI:
                 timeout=15,
             )
         except requests.RequestException as e:
-            _LOGGER.error(f"[MySairAPI] ❌ Login failed: {e}")
-            raise MySairConnectionError(f"Error de red en login: {e}") from e
+            _LOGGER.error(f"[MySairAPI] Login failed: {e}")
+            raise MySairConnectionError(f"Network error during login: {e}") from e
 
         if resp.status_code != 200:
             raise _http_error(resp.status_code, resp.text, "Login error")
@@ -138,28 +137,28 @@ class MySairAPI:
         self.refresh_token_value = self.entity.get("refresh_token")
 
         if not self.access_token:
-            raise MySairAuthError("No se recibió access_token tras login")
+            raise MySairAuthError("No access_token received after login")
 
-        _LOGGER.info("[MySairAPI] ✅ Login OK")
+        _LOGGER.info("[MySairAPI] Login OK")
         self._notify_tokens()
         return True
 
     # ==========================================================
-    # 🔄 REFRESH TOKEN
+    # REFRESH TOKEN
     # ==========================================================
     def refresh_tokens(self):
-        """Renueva el access_token y el refresh_token a partir del refresh_token actual.
+        """Renew the access_token and refresh_token from the current refresh_token.
 
-        No requiere ``password`` (ver `docs/security-and-privacy.md` §3): es el
-        mecanismo usado para restablecer la sesión en cada arranque sin guardar
-        la contraseña en claro. Lanza ``MySairAuthError`` si no hay
-        refresh_token o es inválido/ha expirado (requiere reautenticación), o
-        ``MySairConnectionError`` ante fallos de red o del backend.
+        Does not need the ``password`` (see `docs/security-and-privacy.md` §3):
+        this is how the session is restored on every startup without storing
+        the password in plain text. Raises ``MySairAuthError`` if there is no
+        refresh_token or it is invalid/expired (reauthentication required), or
+        ``MySairConnectionError`` on network or backend failures.
         """
         if not self.refresh_token_value:
-            raise MySairAuthError("No hay refresh_token disponible.")
+            raise MySairAuthError("No refresh_token available.")
 
-        _LOGGER.debug("[MySairAPI] 🔄 Renovando tokens de sesión...")
+        _LOGGER.debug("[MySairAPI] Renewing session tokens...")
         try:
             resp = self.session.put(
                 f"{self.base_url}/user/refreshtokens",
@@ -167,8 +166,10 @@ class MySairAPI:
                 timeout=10,
             )
         except requests.RequestException as e:
-            _LOGGER.error(f"[MySairAPI] ❌ Error al refrescar tokens: {e}")
-            raise MySairConnectionError(f"Error de red al refrescar tokens: {e}") from e
+            _LOGGER.error(f"[MySairAPI] Failed to refresh tokens: {e}")
+            raise MySairConnectionError(
+                f"Network error while refreshing tokens: {e}"
+            ) from e
 
         if resp.status_code != 200:
             raise _http_error(resp.status_code, resp.text, "Refresh tokens error")
@@ -179,25 +180,25 @@ class MySairAPI:
         self.refresh_token_value = entity.get("refresh_token")
 
         if not self.access_token:
-            raise MySairAuthError("No se recibió access_token al refrescar tokens")
+            raise MySairAuthError("No access_token received when refreshing tokens")
 
-        _LOGGER.info("[MySairAPI] ✅ Tokens renovados correctamente.")
+        _LOGGER.info("[MySairAPI] Tokens renewed.")
         self._notify_tokens()
         return True
 
     # ==========================================================
-    # 🌐 PETICIÓN AUTENTICADA (base de los endpoints de datos)
+    # AUTHENTICATED REQUEST (base of the data endpoints)
     # ==========================================================
     def _authed_request(self, method, path, context, timeout=10):
-        """Hace una petición con ``Authorization: Bearer`` y clasifica los errores.
+        """Send a request with ``Authorization: Bearer`` and classify errors.
 
-        Concentra lo que antes repetía cada endpoint: la cabecera, el timeout,
-        el reintento único tras ``refresh_tokens()`` ante un 401 (mismo patrón
-        que ``send_instruction``) y la clasificación de ``_http_error``.
+        Bundles what every endpoint used to repeat: the header, the timeout,
+        the single retry after ``refresh_tokens()`` on a 401 (same pattern as
+        ``send_instruction``) and the ``_http_error`` classification.
 
-        Lanza ``MySairAuthError`` si la sesión no sirve (el llamante debe
-        acabar pidiendo reauth) o ``MySairConnectionError`` ante fallos de red
-        o del backend. Devuelve el objeto ``Response``.
+        Raises ``MySairAuthError`` if the session is not valid (the caller must
+        end up requesting reauth) or ``MySairConnectionError`` on network or
+        backend failures. Returns the ``Response`` object.
         """
 
         def _do():
@@ -210,18 +211,18 @@ class MySairAPI:
 
         try:
             resp = _do()
-            # El access_token caduca mucho antes que el refresh_token: un 401
-            # aislado casi siempre se arregla renovando la sesión y repitiendo.
-            # Si refresh_tokens() falla, propaga su propio error ya clasificado.
+            # The access_token expires long before the refresh_token: a single
+            # 401 is almost always fixed by renewing the session and retrying.
+            # If refresh_tokens() fails, its own classified error propagates.
             if resp.status_code == 401:
                 _LOGGER.debug(
-                    f"[MySairAPI] ⚠️ Token expirado en {path}, renovando sesión y reintentando..."
+                    f"[MySairAPI] Token expired on {path}, renewing session and retrying..."
                 )
                 self.refresh_tokens()
                 resp = _do()
         except requests.RequestException as e:
-            _LOGGER.error(f"[MySairAPI] ❌ Error de red en {context}: {e}")
-            raise MySairConnectionError(f"Error de red en {context}: {e}") from e
+            _LOGGER.error(f"[MySairAPI] Network error in {context}: {e}")
+            raise MySairConnectionError(f"Network error in {context}: {e}") from e
 
         if resp.status_code != 200:
             raise _http_error(resp.status_code, resp.text, context)
@@ -229,28 +230,27 @@ class MySairAPI:
         return resp
 
     def _authed_get_entity(self, path, context):
-        """``GET`` autenticado que devuelve el campo ``entity`` de la respuesta.
+        """Authenticated ``GET`` returning the ``entity`` field of the response.
 
-        Forma común de los endpoints de descubrimiento. Una lista vacía aquí
-        significa "la cuenta no tiene nada", nunca "falló la petición": los
-        fallos se propagan como excepción (antes se devolvía ``[]`` en ambos
-        casos, y por eso un token muerto acababa en un bucle de reintentos en
-        vez de en el flujo de reauth).
+        Common shape of the discovery endpoints. An empty list here means "the
+        account has nothing", never "the request failed": failures propagate as
+        exceptions (``[]`` used to be returned in both cases, which is why a
+        dead token ended in a retry loop instead of the reauth flow).
         """
         return self._authed_request("GET", path, context).json().get("entity", [])
 
     # ==========================================================
-    # ☁️ AWS CREDENTIALS
+    # AWS CREDENTIALS
     # ==========================================================
     def refresh_aws_credentials(self):
-        """Obtiene credenciales temporales de AWS IoT.
+        """Fetch temporary AWS IoT credentials.
 
-        Lanza ``MySairAuthError`` si la sesión ya no sirve: es el hilo MQTT
-        quien la llama en cada (re)conexión, así que es el punto donde se
-        detecta que la sesión ha muerto con la integración ya arrancada.
+        Raises ``MySairAuthError`` if the session is no longer valid: the MQTT
+        thread calls this on every (re)connect, so this is where a session that
+        died while the integration is running gets detected.
         """
         try:
-            _LOGGER.debug("[MySairAPI] ☁️ Solicitando credenciales AWS MQTT...")
+            _LOGGER.debug("[MySairAPI] Requesting AWS MQTT credentials...")
             resp = self._authed_request(
                 "PUT",
                 "user/refreshawscredentials",
@@ -270,13 +270,13 @@ class MySairAPI:
                 "aws_mqtt_user",
             ]
 
-            # Validar presencia de claves
+            # Check that all keys are present
             if not all(k in entity for k in required_keys):
-                raise Exception("Credenciales AWS incompletas o inválidas")
+                raise Exception("AWS credentials incomplete or invalid")
 
-            # Normalizar nombres para mqtt_handler.
-            # aws_base_topic y aws_expires_at son opcionales (pueden no venir en
-            # APIs antiguas); se usan para el topic dinámico y el refresco proactivo.
+            # Normalise names for mqtt_handler.
+            # aws_base_topic and aws_expires_at are optional (older APIs may not
+            # send them); they are used for the dynamic topic and proactive refresh.
             self.aws_credentials = {
                 "aws_mqtt_host": entity["aws_mqtt_host"],
                 "aws_default_region": entity["aws_default_region"],
@@ -289,21 +289,21 @@ class MySairAPI:
             }
 
             _LOGGER.debug(
-                f"[MySairAPI] ✅ Credenciales AWS obtenidas para usuario {entity['aws_mqtt_user']}"
+                f"[MySairAPI] AWS credentials received for user {entity['aws_mqtt_user']}"
             )
             return self.aws_credentials
 
         except Exception as e:
-            _LOGGER.error(f"[MySairAPI] ❌ Error al obtener credenciales AWS: {e}")
+            _LOGGER.error(f"[MySairAPI] Failed to get AWS credentials: {e}")
             raise
 
     def aws_credentials_expired(self, margin_seconds=60):
-        """Indica si conviene refrescar las credenciales AWS antes de (re)conectar.
+        """Whether the AWS credentials should be refreshed before (re)connecting.
 
-        Devuelve True si faltan credenciales o si expiran en menos de
-        ``margin_seconds``. Usa ``aws_expires_at`` (unix s) cuando está presente;
-        si no hay información de expiración, no fuerza refresco por tiempo.
-        Confirmado desde la app oficial (ver docs/protocol-findings.md).
+        Returns True if credentials are missing or expire within
+        ``margin_seconds``. Uses ``aws_expires_at`` (unix s) when present;
+        without expiry information no time-based refresh is forced.
+        Confirmed from the official app (see docs/protocol-findings.md).
         """
         if not self.aws_credentials:
             return True
@@ -316,15 +316,15 @@ class MySairAPI:
             return False
 
     def seconds_until_aws_credentials_expire(self, margin_seconds=60):
-        """Segundos hasta que conviene refrescar la conexión MQTT proactivamente.
+        """Seconds until the MQTT connection should be refreshed proactively.
 
-        Devuelve ``None`` si no hay credenciales o no se conoce ``aws_expires_at``
-        (no se puede programar un refresco por tiempo). Si ya ha expirado o está
-        dentro del margen, devuelve ``0`` (refrescar ya). Ver
-        docs/protocol-findings.md §6b: la app oficial programa un
-        ``setTimeout(refreshAwsCredentials, getMqttExpirationTime())`` para
-        refrescar la sesión MQTT *antes* de que AWS la corte, en vez de esperar
-        a que se caiga sola.
+        Returns ``None`` if there are no credentials or ``aws_expires_at`` is
+        unknown (no time-based refresh can be scheduled). Returns ``0`` if
+        already expired or within the margin (refresh now). See
+        docs/protocol-findings.md §6b: the official app schedules a
+        ``setTimeout(refreshAwsCredentials, getMqttExpirationTime())`` to
+        refresh the MQTT session *before* AWS drops it, instead of waiting for
+        it to fail.
         """
         if not self.aws_credentials:
             return None
@@ -337,37 +337,37 @@ class MySairAPI:
             return None
 
     # ==========================================================
-    # 📍 LOCATIONS / INSTALLATIONS / DEVICES
+    # LOCATIONS / INSTALLATIONS / DEVICES
     # ==========================================================
     def get_locations(self):
-        """Devuelve la lista de ubicaciones (locations)."""
-        _LOGGER.info("[MySairAPI] 📍 Locations...")
+        """Return the list of locations."""
+        _LOGGER.info("[MySairAPI] Locations...")
         return self._authed_get_entity("locations", "Locations error")
 
     def get_installations(self, location_id):
-        """Devuelve instalaciones (installations) de una ubicación."""
-        _LOGGER.info(f"[MySairAPI] 🔧 Installations loc={location_id}")
+        """Return the installations of a location."""
+        _LOGGER.info(f"[MySairAPI] Installations loc={location_id}")
         return self._authed_get_entity(
             f"installations?location_id={location_id}&validated=1",
             "Installations error",
         )
 
     def get_devices(self, installation_ref):
-        """Devuelve los dispositivos (termostatos) de una instalación."""
-        _LOGGER.info(f"[MySairAPI] 📟 Devices ref={installation_ref}")
+        """Return the devices (thermostats) of an installation."""
+        _LOGGER.info(f"[MySairAPI] Devices ref={installation_ref}")
         return self._authed_get_entity(
             f"devices?installation_ref={installation_ref}", "Devices error"
         )
 
     # ==========================================================
-    # 📡 SEND INSTRUCTION (para solicitar estado o comandos)
+    # SEND INSTRUCTION (status requests and commands)
     # ==========================================================
     def send_instruction(self, instruction):
-        """Envía una instrucción directamente al endpoint /send/instruction.
-        Si el token ha expirado, renueva automáticamente los tokens y credenciales AWS y reintenta una vez.
+        """Send an instruction to the /send/instruction endpoint.
+        If the token has expired, renews the tokens and AWS credentials and retries once.
         """
         try:
-            _LOGGER.debug(f"[MySairAPI] 📤 Enviando instrucción: {instruction}")
+            _LOGGER.debug(f"[MySairAPI] Sending instruction: {instruction}")
             headers = {"Authorization": f"Bearer {self.access_token}"}
 
             resp = self.session.post(
@@ -377,14 +377,14 @@ class MySairAPI:
                 timeout=10,
             )
 
-            # --- Si el token expiró, refrescamos y reintentamos una vez ---
-            # refresh_tokens() lanza MySairAuthError/MySairConnectionError si
-            # falla; se propaga tal cual (capturado más abajo como Exception).
+            # --- If the token expired, refresh and retry once ---
+            # refresh_tokens() raises MySairAuthError/MySairConnectionError on
+            # failure; it propagates unchanged (caught below as Exception).
             if resp.status_code == 401:
-                _LOGGER.debug("[MySairAPI] ⚠️ Token HTTP expirado, renovando sesión...")
+                _LOGGER.debug("[MySairAPI] HTTP token expired, renewing session...")
                 self.refresh_tokens()
                 _LOGGER.debug(
-                    "[MySairAPI] 🔄 Token HTTP renovado, actualizando credenciales AWS..."
+                    "[MySairAPI] HTTP token renewed, updating AWS credentials..."
                 )
                 self.refresh_aws_credentials()
                 headers = {"Authorization": f"Bearer {self.access_token}"}
@@ -395,10 +395,10 @@ class MySairAPI:
                     timeout=10,
                 )
 
-            # --- Validación final ---
-            # Clasificado como el resto de endpoints: un fallo de sesión aquí
-            # debe llegar como MySairAuthError para que el llamante
-            # (tarea periódica / entidades) pueda pedir reauth.
+            # --- Final validation ---
+            # Classified like the other endpoints: a session failure here must
+            # arrive as MySairAuthError so the caller (periodic task /
+            # entities) can request reauth.
             if resp.status_code != 201:
                 raise _http_error(resp.status_code, resp.text, "Instruction error")
 
@@ -408,31 +408,31 @@ class MySairAPI:
             if msg != "Creado" or error:
                 raise Exception(f"Instruction rejected: {_truncate(data)}")
 
-            _LOGGER.debug("[MySairAPI] ✅ Instrucción enviada correctamente")
+            _LOGGER.debug("[MySairAPI] Instruction sent")
             return data
 
         except Exception as e:
-            _LOGGER.error(f"[MySairAPI] ❌ Error al enviar instrucción: {e}")
+            _LOGGER.error(f"[MySairAPI] Failed to send instruction: {e}")
             raise
 
     # ==========================================================
-    # ⚙️ ZONE COMMAND HELPERS (para Climate, Switch, etc.)
+    # ZONE COMMAND HELPERS (for climate, switch, etc.)
     # ==========================================================
     def send_zone_command(
         self, ctl, device, command_type, value=None, temperature=None
     ):
         """
-        Envía una instrucción formateada correctamente para controlar un termostato.
+        Send a correctly formatted instruction to control a zone thermostat.
 
-        command_type puede ser:
-            - "mode"     → enciende en calor o frío (value = "0" o "1")
-            - "temp"     → cambia temperatura (value = temperatura)
-            - "power"    → apaga (value = "0")
-            - "fanspeed" → velocidad de ventilador (value = "0".."4"; ver docs/protocol-findings.md §9)
+        command_type can be:
+            - "mode"     → turn on in heat or cool (value = "0" or "1")
+            - "temp"     → change the setpoint (value = temperature)
+            - "power"    → turn off (value = "0")
+            - "fanspeed" → fan speed (value = "0".."4"; see docs/protocol-findings.md §9)
         """
         try:
             if not ctl or not device:
-                raise ValueError("Faltan parámetros obligatorios (ctl o device).")
+                raise ValueError("Missing required parameters (ctl or device).")
 
             app_name = (
                 self.aws_credentials.get("aws_mqtt_user", "web0077")
@@ -442,9 +442,7 @@ class MySairAPI:
 
             if command_type == "mode":
                 if value not in ["0", "1"]:
-                    raise ValueError(
-                        "Modo inválido: usa '0' para calor o '1' para frío."
-                    )
+                    raise ValueError("Invalid mode: use '0' for heat or '1' for cool.")
                 payload_value = {"mode": value, "temperature": str(temperature or 22.0)}
 
             elif command_type == "temp":
@@ -455,11 +453,11 @@ class MySairAPI:
 
             elif command_type == "fanspeed":
                 if value not in ("0", "1", "2", "3", "4"):
-                    raise ValueError("Velocidad de ventilador inválida: usa '0'..'4'.")
+                    raise ValueError("Invalid fan speed: use '0'..'4'.")
                 payload_value = str(value)
 
             else:
-                raise ValueError(f"Tipo de comando no soportado: {command_type}")
+                raise ValueError(f"Unsupported command type: {command_type}")
 
             instruction = [
                 {
@@ -473,26 +471,26 @@ class MySairAPI:
             ]
 
             _LOGGER.debug(
-                f"[MySairAPI] ⚙️ Enviando comando '{command_type}' a {device} ({ctl}) → {instruction}"
+                f"[MySairAPI] Sending command '{command_type}' to {device} ({ctl}) → {instruction}"
             )
             return self.send_instruction(instruction)
 
         except Exception as e:
             _LOGGER.error(
-                f"[MySairAPI] ❌ Error al enviar comando {command_type} para {device}: {e}"
+                f"[MySairAPI] Failed to send command {command_type} for {device}: {e}"
             )
             raise
 
     def send_installation_command(self, ctl, command_type, value=None):
-        """Envía una instrucción a nivel de instalación completa (``device`` vacío).
+        """Send an instruction for a whole installation (empty ``device``).
 
-        command_type puede ser:
-            - "stop"   → detiene la instalación completa (value = "1", F5)
-            - "status" → solicita sincronización de estado (value = "sync")
+        command_type can be:
+            - "stop"   → stop the whole installation (value = "1", F5)
+            - "status" → request a state sync (value = "sync")
         """
         try:
             if not ctl:
-                raise ValueError("Falta el parámetro obligatorio 'ctl'.")
+                raise ValueError("Missing required parameter 'ctl'.")
 
             app_name = (
                 self.aws_credentials.get("aws_mqtt_user", "web0077")
@@ -506,7 +504,7 @@ class MySairAPI:
                 payload_value = "sync"
             else:
                 raise ValueError(
-                    f"Tipo de comando de instalación no soportado: {command_type}"
+                    f"Unsupported installation command type: {command_type}"
                 )
 
             instruction = [
@@ -521,22 +519,22 @@ class MySairAPI:
             ]
 
             _LOGGER.debug(
-                f"[MySairAPI] 🏠 Enviando comando de instalación '{command_type}' a {ctl} → {instruction}"
+                f"[MySairAPI] Sending installation command '{command_type}' to {ctl} → {instruction}"
             )
             return self.send_instruction(instruction)
 
         except Exception as e:
             _LOGGER.error(
-                f"[MySairAPI] ❌ Error al enviar comando de instalación {command_type} para {ctl}: {e}"
+                f"[MySairAPI] Failed to send installation command {command_type} for {ctl}: {e}"
             )
             raise
 
     # ==========================================================
-    # 🔏 FIRMAR URL AWS (WebSocket MQTT)
+    # SIGN AWS URL (MQTT WebSocket)
     # ==========================================================
     @staticmethod
     def aws_sign_url(host, region, access_key, secret_key, token):
-        """Genera una URL firmada para conexión MQTT AWS."""
+        """Build a signed URL for the AWS MQTT connection."""
         service = "iotdevicegateway"
         algorithm = "AWS4-HMAC-SHA256"
         t = datetime.datetime.now(datetime.timezone.utc)
@@ -577,5 +575,5 @@ class MySairAPI:
         )
 
         url = f"wss://{host}/mqtt?{canonical_querystring}"
-        _LOGGER.info(f"[MySairAPI] 🔗 URL MQTT firmada generada para {host}")
+        _LOGGER.info(f"[MySairAPI] Signed MQTT URL generated for {host}")
         return url

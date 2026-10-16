@@ -1,8 +1,8 @@
-"""Tests P2 de ciclo de vida (harness de Home Assistant, ver Dockerfile.test).
+"""P2 lifecycle tests (Home Assistant harness, see Dockerfile.test).
 
-Sin red real: MySairAPI y MySairMQTTClient van parcheados. El objetivo es
-validar el ciclo de vida (setup/unload, ConfigEntryAuthFailed/NotReady), no
-el protocolo (ya cubierto en tests/test_api.py, tests/test_status_parser.py).
+No real network: MySairAPI and MySairMQTTClient are patched. The goal is to
+validate the lifecycle (setup/unload, ConfigEntryAuthFailed/NotReady), not
+the protocol (already covered in tests/test_api.py, tests/test_status_parser.py).
 """
 
 import pytest
@@ -26,7 +26,7 @@ from custom_components.mysair.mqtt_handler import MySairMQTTClient
 def _mock_refresh_tokens_ok(self):
     self.access_token = "ACCESS"
     self.refresh_token_value = "REFRESH_ROTATED"
-    self._notify_tokens()  # el código real lo llama tras renovar; el mock reemplaza el método entero
+    self._notify_tokens()  # the real code calls it after renewing; the mock replaces the whole method
     return True
 
 
@@ -87,12 +87,12 @@ async def test_setup_entry_success(hass, monkeypatch):
     stored = hass.data[DOMAIN][entry.entry_id]
     assert stored["installations"] == ["INST_A"]
     assert stored["devices"] == {"INST_A": [{"reference": "DEV_1", "name": "Salon"}]}
-    # El refresh_token rotado se persiste en la config entry (callback on_tokens_refreshed).
+    # The rotated refresh_token is persisted in the config entry (on_tokens_refreshed callback).
     assert entry.data["refresh_token"] == "REFRESH_ROTATED"
 
 
 async def test_setup_entry_migrates_legacy_password_out(hass, monkeypatch):
-    # A6: entradas creadas antes del cambio guardaban password/access_token en claro.
+    # A6: entries created before the change stored password/access_token in plain text.
     _patch_happy_api(monkeypatch)
     entry = _make_entry(
         extra_data={"password": "plaintext-leftover", "access_token": "OLD_TOKEN"}
@@ -171,7 +171,7 @@ async def test_setup_entry_no_installations_retries(hass, monkeypatch):
 
 
 def _dead_session(self, *args, **kwargs):
-    """Respuesta de un endpoint cuya sesión ya no vale (Passport: 404)."""
+    """Response of an endpoint whose session is no longer valid (Passport: 404)."""
     raise MySairAuthError(
         "Locations error: 404 No query results for model "
         "[Laravel\\Passport\\RefreshToken]"
@@ -184,11 +184,11 @@ def _dead_session(self, *args, **kwargs):
 async def test_setup_entry_auth_error_during_discovery_starts_reauth(
     hass, monkeypatch, method
 ):
-    """Regresión del incidente del 2026-09-11.
+    """Regression test: a dead session during discovery must request reauth.
 
-    El descubrimiento devolvía [] ante cualquier fallo, así que una sesión
-    muerta se leía como "cuenta vacía" → SETUP_RETRY en bucle, sin que HA
-    ofreciera nunca el botón de reautenticar.
+    Discovery used to return [] on any failure, so a dead session was read as
+    an "empty account" → SETUP_RETRY in a loop, without HA ever offering the
+    reauthenticate button.
     """
     _patch_happy_api(monkeypatch)
     monkeypatch.setattr(MySairAPI, method, _dead_session)
@@ -204,7 +204,7 @@ async def test_setup_entry_auth_error_during_discovery_starts_reauth(
 
 
 async def test_setup_entry_discovery_connection_error_retries(hass, monkeypatch):
-    """Un backend caído sigue siendo reintento, no reauth."""
+    """A backend outage still means retry, not reauth."""
     _patch_happy_api(monkeypatch)
     monkeypatch.setattr(
         MySairAPI,
@@ -221,7 +221,7 @@ async def test_setup_entry_discovery_connection_error_retries(hass, monkeypatch)
 
 
 async def test_mqtt_auth_failure_starts_reauth(hass, monkeypatch):
-    """Si la sesión muere en caliente, el hilo MQTT pide reauth sin reiniciar."""
+    """If the session dies at runtime, the MQTT thread requests reauth without a restart."""
     _patch_happy_api(monkeypatch)
     captured = {}
     monkeypatch.setattr(
@@ -235,7 +235,7 @@ async def test_mqtt_auth_failure_starts_reauth(hass, monkeypatch):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # El hilo MQTT invoca el callback desde su propio hilo.
+    # The MQTT thread invokes the callback from its own thread.
     assert captured["on_auth_failure"] is not None
     captured["on_auth_failure"]()
     await hass.async_block_till_done()
@@ -263,9 +263,9 @@ async def test_unload_entry_cleans_up(hass, monkeypatch):
 
 
 async def test_reload_entry_does_not_duplicate_entities_or_service(hass, monkeypatch):
-    # P3 (docs/testing-strategy.md): un reload no debe dejar entidades
-    # duplicadas, listeners colgados del coordinador/servicio anterior, ni
-    # romper la actualización vía MQTT tras volver a cargar.
+    # P3 (docs/testing-strategy.md): a reload must not leave duplicate
+    # entities or dangling listeners of the previous coordinator/service, nor
+    # break updates via MQTT after reloading.
     _patch_happy_api(monkeypatch)
     monkeypatch.setattr(MySairMQTTClient, "stop", lambda self: None)
 
@@ -281,7 +281,7 @@ async def test_reload_entry_does_not_duplicate_entities_or_service(hass, monkeyp
     assert hass.states.async_entity_ids("climate") == ["climate.salon"]
     assert hass.services.has_service(DOMAIN, SERVICE_STOP_INSTALLATION)
 
-    # El coordinador/dispatcher se re-engancharon limpio tras el reload.
+    # The coordinator/dispatcher re-attached cleanly after the reload.
     _fire_status(
         hass,
         "INST_A",
@@ -307,7 +307,7 @@ async def test_stop_installation_service_calls_api(hass, monkeypatch):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    calls.clear()  # descarta la llamada "status" del refresco periódico (__init__.py)
+    calls.clear()  # ignore the "status" call of the periodic refresh (__init__.py)
 
     assert hass.services.has_service(DOMAIN, SERVICE_STOP_INSTALLATION)
     await hass.services.async_call(
@@ -349,13 +349,13 @@ async def test_stop_installation_service_removed_after_last_unload(hass, monkeyp
     assert not hass.services.has_service(DOMAIN, SERVICE_STOP_INSTALLATION)
 
 
-# --- Varias instalaciones en una cuenta / cambio de topología (P3) ---
+# --- Several installations in one account / topology change (P3) ---
 
 
 async def test_setup_entry_multiple_installations(hass, monkeypatch):
-    # El código de descubrimiento (bucle sobre `installations`) y el filtro
-    # del coordinador por `ctl` ya estaban preparados para N>1 instalaciones;
-    # hasta ahora solo se probaba con una.
+    # The discovery code (loop over `installations`) and the coordinator's
+    # filter by `ctl` already supported N>1 installations; only one was tested
+    # before.
     _patch_happy_api(monkeypatch)
     monkeypatch.setattr(
         MySairAPI,
@@ -384,7 +384,7 @@ async def test_setup_entry_multiple_installations(hass, monkeypatch):
     assert hass.states.get("climate.salon") is not None
     assert hass.states.get("climate.dormitorio") is not None
 
-    # Un status de INST_B solo debe actualizar su propia zona.
+    # A status of INST_B must only update its own zone.
     _fire_status(
         hass,
         "INST_B",
@@ -393,18 +393,16 @@ async def test_setup_entry_multiple_installations(hass, monkeypatch):
     await hass.async_block_till_done()
 
     assert hass.states.get("climate.dormitorio").state != "unavailable"
-    assert (
-        hass.states.get("climate.salon").state == "unavailable"
-    )  # sin status propio todavía
+    assert hass.states.get("climate.salon").state == "unavailable"  # no own status yet
 
 
 async def test_topology_change_removes_orphaned_zone_device_and_entities(
     hass, monkeypatch
 ):
-    # _cleanup_stale_zone_devices (__init__.py): si una zona desaparece de
-    # get_devices() entre reinicios, su dispositivo (y todas sus entidades:
-    # climate + 4 sensores + 2 switches) se elimina del registro en vez de
-    # quedar huérfano para siempre; la zona nueva se crea con normalidad.
+    # _cleanup_stale_zone_devices (__init__.py): if a zone disappears from
+    # get_devices() between restarts, its device (and all its entities:
+    # climate + 4 sensors + 2 switches) is removed from the registry instead of
+    # staying orphaned forever; the new zone is created normally.
     _patch_happy_api(monkeypatch)
     monkeypatch.setattr(MySairMQTTClient, "stop", lambda self: None)
 
@@ -427,7 +425,7 @@ async def test_topology_change_removes_orphaned_zone_device_and_entities(
         == "climate.salon"
     )
 
-    # Cambio de topología: DEV_1 desaparece, aparece DEV_2 nueva.
+    # Topology change: DEV_1 disappears, a new DEV_2 appears.
     monkeypatch.setattr(
         MySairAPI,
         "get_devices",
@@ -436,7 +434,7 @@ async def test_topology_change_removes_orphaned_zone_device_and_entities(
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
-    # La zona nueva se crea y funciona con normalidad.
+    # The new zone is created and works normally.
     assert hass.states.get("climate.dormitorio") is not None
     _fire_status(
         hass,
@@ -446,7 +444,7 @@ async def test_topology_change_removes_orphaned_zone_device_and_entities(
     await hass.async_block_till_done()
     assert hass.states.get("climate.dormitorio").state != "unavailable"
 
-    # El dispositivo y las entidades de la zona eliminada ya no existen.
+    # The device and entities of the removed zone no longer exist.
     assert (
         registry.async_get_entity_id("climate", DOMAIN, "mysair_INST_A_DEV_1") is None
     )
@@ -458,15 +456,14 @@ async def test_topology_change_removes_orphaned_zone_device_and_entities(
 
 
 async def test_existing_entity_ids_survive_the_naming_change(hass, monkeypatch):
-    """Una instalación anterior conserva sus entity_id al adoptar has_entity_name.
+    """An existing installation keeps its entity_ids after adopting has_entity_name.
 
-    Home Assistant 2026 compone el entity_id como área + dispositivo + entidad,
-    y la integración pasó a usar ``has_entity_name`` para que esa composición
-    diera nombres limpios ("Salon" + "Temperatura actual"). El registro de
-    entidades manda sobre cualquier sugerencia de la integración mientras el
-    ``unique_id`` no cambie, así que quien ya tuviera la integración instalada
-    no debe ver ningún entity_id renombrado (sus automatizaciones y paneles
-    siguen funcionando).
+    Home Assistant 2026 builds the entity_id from area + device + entity, and
+    the integration uses ``has_entity_name`` so this composition yields clean
+    names ("Salon" + entity name). The entity registry takes precedence over any
+    suggestion of the integration as long as the ``unique_id`` does not change,
+    so existing installations must not see any renamed entity_id (their
+    automations and dashboards keep working).
     """
     _patch_happy_api(monkeypatch)
     entry = _make_entry()

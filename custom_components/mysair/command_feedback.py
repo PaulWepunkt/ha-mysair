@@ -1,15 +1,14 @@
-"""Seguimiento de confirmación (ACK) de comandos vía el topic MQTT feedback.
+"""Tracking of command acknowledgements (ACK) via the MQTT feedback topic.
 
-Mixin compartido por MySairThermostat (climate.py) y MySairSwitch (switch.py):
-ambas envían comandos por HTTP y necesitan la misma lógica para correlacionar
-la respuesta (``orderId``) con el ACK que llega después por MQTT (ver
-docs/protocol-findings.md §8, docs/known-unknowns.md #23 — payload confirmado
-con captura real de producción el 2026-07-20).
+Mixin shared by MySairThermostat (climate.py) and MySairSwitch (switch.py):
+both send commands over HTTP and need the same logic to correlate the
+response (``orderId``) with the ACK that arrives later over MQTT (see
+docs/protocol-findings.md §8, docs/known-unknowns.md #23).
 
-Si no llega confirmación a tiempo, se revierte el estado optimista al último
-valor conocido (``revert_fn``, opcional en ``_track_command_confirmation``).
-Si llega un status MQTT real antes (nueva verdad confirmada), se descarta
-cualquier revert pendiente: ya no hace falta, el dato fresco manda.
+If no confirmation arrives in time, the optimistic state is reverted to the
+last known value (``revert_fn``, optional in ``_track_command_confirmation``).
+If a real MQTT status arrives first (newly confirmed truth), any pending
+revert is discarded: it is no longer needed, the fresh data wins.
 """
 
 import logging
@@ -24,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CommandFeedbackMixin:
-    """Requiere que la clase que lo use defina ``self.hass``, ``self.inst_ref``, ``self.name``."""
+    """The using class must define ``self.hass``, ``self.inst_ref`` and ``self.name``."""
 
     def _init_command_feedback(self):
         self._pending_order_id = None
@@ -46,12 +45,12 @@ class CommandFeedbackMixin:
             self._cancel_feedback_timeout = None
 
     def _track_command_confirmation(self, response, revert_fn=None):
-        """Registra el ``orderId`` de un comando recién enviado y arma el timeout.
+        """Record the ``orderId`` of a command just sent and arm the timeout.
 
-        ``revert_fn``, si se pasa, es una función sin argumentos que restaura
-        el estado local al valor previo al cambio optimista; se llama solo si
-        no llega confirmación a tiempo (no escribe el estado, eso lo hace el
-        llamador tras invocarla).
+        ``revert_fn``, if given, is a function without arguments that restores
+        the local state to the value before the optimistic change; it is only
+        called if no confirmation arrives in time (it does not write the
+        state, the caller does that after invoking it).
         """
         order_id = extract_order_id(response)
         if not order_id:
@@ -65,10 +64,10 @@ class CommandFeedbackMixin:
         )
 
     def _clear_pending_command(self):
-        """Descarta cualquier comando pendiente de confirmar (y su revert).
+        """Discard any command awaiting confirmation (and its revert).
 
-        Se llama al recibir un status MQTT real para esta zona: ese dato
-        fresco ya es la verdad, no hace falta seguir esperando/revirtiendo.
+        Called when a real MQTT status for this zone arrives: that fresh data
+        is the truth, there is no need to keep waiting/reverting.
         """
         self._pending_order_id = None
         self._pending_revert_fn = None
@@ -86,7 +85,7 @@ class CommandFeedbackMixin:
         ):
             return
         _LOGGER.debug(
-            f"[MySair] ✅ Comando confirmado para {self.name} (orderId={self._pending_order_id})"
+            f"[MySair] Command confirmed for {self.name} (orderId={self._pending_order_id})"
         )
         self._pending_order_id = None
         self._pending_revert_fn = None
@@ -99,16 +98,18 @@ class CommandFeedbackMixin:
         if self._pending_order_id:
             mqtt_client = getattr(self, "mqtt_client", None)
             if mqtt_client is not None and not mqtt_client.connected:
-                reason = "MQTT desconectado en ese momento"
+                reason = "MQTT was disconnected at that moment"
             else:
-                reason = "con MQTT activo — puede ser un ACK perdido o un problema del backend"
+                reason = (
+                    "with MQTT connected - possibly a lost ACK or a backend problem"
+                )
 
             revert_fn = self._pending_revert_fn
             revert_note = (
-                " — revirtiendo al último estado confirmado" if revert_fn else ""
+                " - reverting to the last confirmed state" if revert_fn else ""
             )
             _LOGGER.warning(
-                f"[MySair] ⚠️ Sin confirmación MQTT para {self.name} tras "
+                f"[MySair] No MQTT confirmation for {self.name} after "
                 f"{FEEDBACK_TIMEOUT_SECONDS}s ({reason}, orderId={self._pending_order_id})"
                 f"{revert_note}"
             )
