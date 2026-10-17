@@ -49,7 +49,7 @@
         "name": "Heiz-/Kühlkonflikt"
       },
       "direction_mismatch": {
-        "name": "Betriebsart weicht ab"
+        "name": "Passt nicht zur Wärmepumpe"
       }
     },
     "button": {
@@ -167,8 +167,8 @@
       "floor_heating": {
         "name": "Fußbodenheizung"
       },
-      "hold_direction": {
-        "name": "Betriebsart festhalten"
+      "mysair_switches_heat_pump": {
+        "name": "MySair schaltet Wärmepumpe"
       }
     }
   },

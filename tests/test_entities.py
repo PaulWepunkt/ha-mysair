@@ -1067,8 +1067,8 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert names["binary_sensor.mysair_inst_a_in_betrieb"] == "MySair INST_A In Betrieb"
     assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
     assert names["select.salon_heizen_mit"] == "Salon Heizen mit"
-    assert "switch.mysair_inst_a_betriebsart_festhalten" in names
-    assert "binary_sensor.mysair_inst_a_betriebsart_weicht_ab" in names
+    assert "switch.mysair_inst_a_mysair_schaltet_warmepumpe" in names
+    assert "binary_sensor.mysair_inst_a_passt_nicht_zur_warmepumpe" in names
     assert names["select.salon_kuhlen_mit"] == "Salon Kühlen mit"
 
 
@@ -1797,23 +1797,42 @@ async def test_options_change_updates_select_options(hass, monkeypatch):
     ]
 
 
-# --- Hold the operating mode ("Betriebsart festhalten") ---
+# --- Heat pump not switched by MySair ("MySair schaltet Wärmepumpe" off) ---
 
 
 async def _hold(hass, on=True):
+    """Turn "MySair schaltet Wärmepumpe" off (hold) or back on."""
     switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
     await hass.services.async_call(
-        "switch", "turn_on" if on else "turn_off", {"entity_id": switch}, blocking=True
+        "switch", "turn_off" if on else "turn_on", {"entity_id": switch}, blocking=True
     )
     return switch
 
 
-async def test_hold_switch_is_config_and_off_by_default(hass, monkeypatch):
+async def test_heat_pump_switch_is_config_and_on_by_default(hass, monkeypatch):
     await _setup_two_zones(hass, monkeypatch, [])
     switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
     entry = er.async_get(hass).async_get(switch)
     assert entry.entity_category == "config"
+    assert hass.states.get(switch).state == "on"
+
+
+async def test_heat_pump_switch_on_releases_held_direction(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    switch = await _hold(hass)
     assert hass.states.get(switch).state == "off"
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "heat"]
+
+    await _hold(hass, on=False)
+    assert hass.states.get(switch).state == "on"
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == [
+        "off",
+        "heat",
+        "cool",
+    ]
 
 
 async def test_hold_takes_over_current_direction_and_limits_turn_on(hass, monkeypatch):
@@ -1915,7 +1934,10 @@ async def test_hold_and_held_direction_are_restored(hass, monkeypatch):
     mock_restore_cache_with_extra_data(
         hass,
         [
-            (State("switch.mysair_inst_a_hold_operating_mode", "on"), {}),
+            (
+                State("switch.mysair_inst_a_mysair_switches_heat_pump", "off"),
+                {"mysair_switches_heat_pump": False},
+            ),
             (
                 State("select.mysair_inst_a_operating_mode", "cool"),
                 {"held_is_heat": False},
@@ -1929,6 +1951,35 @@ async def test_hold_and_held_direction_are_restored(hass, monkeypatch):
 
     switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
     select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
-    assert switch == "switch.mysair_inst_a_hold_operating_mode"
-    assert hass.states.get(switch).state == "on"
+    assert switch == "switch.mysair_inst_a_mysair_switches_heat_pump"
+    assert hass.states.get(switch).state == "off"
     assert hass.states.get(select).state == "cool"
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "cool"]
+
+
+async def test_hold_saved_by_3_3_0_is_migrated(hass, monkeypatch):
+    # Version 3.3.0 saved the inverted switch ("Betriebsart festhalten" on)
+    # without extra data: it must come back as "MySair schaltet Wärmepumpe"
+    # off, i.e. the direction stays held.
+    from pytest_homeassistant_custom_component.common import (
+        mock_restore_cache_with_extra_data,
+    )
+    from homeassistant.core import State
+
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (State("switch.mysair_inst_a_mysair_switches_heat_pump", "on"), {}),
+            (
+                State("select.mysair_inst_a_operating_mode", "cool"),
+                {"held_is_heat": False},
+            ),
+        ],
+    )
+    await _setup_two_zones(hass, monkeypatch, [])
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
+    assert hass.states.get(switch).state == "off"
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "cool"]

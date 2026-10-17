@@ -63,10 +63,10 @@ class MySairDirectionConflictSensor(MySairInstallationEntity, BinarySensorEntity
 
 
 class MySairDirectionMismatchSensor(MySairInstallationEntity, BinarySensorEntity):
-    """Problem: the installation runs in another direction than the held one.
+    """Problem: the installation runs in another direction than the heat pump.
 
-    Only relevant with "Betriebsart festhalten": the held direction matches
-    the heat pump, so a zone switched on in the other direction (e.g. at a
+    Only relevant when "MySair schaltet Wärmepumpe" is off: the held
+    direction ("Betriebsart") matches the heat pump, so a zone switched on in the other direction (e.g. at a
     wall thermostat or in the app) works against the heat pump.
     """
 

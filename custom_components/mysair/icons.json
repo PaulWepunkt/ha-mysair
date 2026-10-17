@@ -96,10 +96,10 @@
       "floor_heating": {
         "default": "mdi:heat-wave"
       },
-      "hold_direction": {
-        "default": "mdi:lock",
+      "mysair_switches_heat_pump": {
+        "default": "mdi:link-variant",
         "state": {
-          "off": "mdi:lock-open-variant-outline"
+          "off": "mdi:link-variant-off"
         }
       }
     }

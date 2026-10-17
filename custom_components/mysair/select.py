@@ -49,8 +49,8 @@ class MySairOperatingModeSelect(MySairInstallationEntity, RestoreEntity, SelectE
     zone that is turned on starts in the chosen direction
     (docs/protocol-findings.md §4b).
 
-    With "Betriebsart festhalten" (switch on the installation device) the
-    selection is the held direction instead: it matches a heat pump that
+    With "MySair schaltet Wärmepumpe" turned off (switch on the installation
+    device) the selection is the held direction instead: it matches a heat pump that
     MySair does not switch, can be changed at any time and is kept over a
     restart.
     """

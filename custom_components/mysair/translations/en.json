@@ -49,7 +49,7 @@
         "name": "Heat/cool conflict"
       },
       "direction_mismatch": {
-        "name": "Operating mode mismatch"
+        "name": "Mismatch with heat pump"
       }
     },
     "button": {
@@ -167,8 +167,8 @@
       "floor_heating": {
         "name": "Floor heating"
       },
-      "hold_direction": {
-        "name": "Hold operating mode"
+      "mysair_switches_heat_pump": {
+        "name": "MySair switches heat pump"
       }
     }
   },
