@@ -80,3 +80,12 @@ def test_fan_modes_are_translated():
     climate = _load(BASE / "strings.json")["entity"]["climate"]["thermostat"]
     states = climate["state_attributes"]["fan_mode"]["state"]
     assert set(states) == {"zonal", "1", "2", "3", "auto"}
+
+
+def test_exception_translations_have_a_message():
+    # hassfest requires {"message": "..."} for every exception translation.
+    for path in [BASE / "strings.json"] + [
+        BASE / "translations" / f"{lang}.json" for lang in LANGUAGES
+    ]:
+        for key, value in _load(path)["exceptions"].items():
+            assert isinstance(value, dict) and "message" in value, (path.name, key)

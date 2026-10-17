@@ -179,7 +179,11 @@
     "command_failed": {
       "message": "The command could not be sent to MySair. Check the connection and try again."
     },
-    "no_medium_allowed": "No medium is allowed for this zone in this direction. Check the MySair integration options.",
-    "floor_heating_disabled": "Floor heating is disabled in the MySair integration options."
+    "no_medium_allowed": {
+      "message": "No medium is allowed for this zone in this direction. Check the MySair integration options."
+    },
+    "floor_heating_disabled": {
+      "message": "Floor heating is disabled in the MySair integration options."
+    }
   }
 }

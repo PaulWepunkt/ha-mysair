@@ -179,7 +179,11 @@
     "command_failed": {
       "message": "Der Befehl konnte nicht an MySair gesendet werden. Bitte die Verbindung prüfen und es erneut versuchen."
     },
-    "no_medium_allowed": "Für diese Zone ist in dieser Richtung kein Medium erlaubt. Bitte die Optionen der MySair-Integration prüfen.",
-    "floor_heating_disabled": "Fußbodenheizung ist in den Optionen der MySair-Integration ausgeschaltet."
+    "no_medium_allowed": {
+      "message": "Für diese Zone ist in dieser Richtung kein Medium erlaubt. Bitte die Optionen der MySair-Integration prüfen."
+    },
+    "floor_heating_disabled": {
+      "message": "Fußbodenheizung ist in den Optionen der MySair-Integration ausgeschaltet."
+    }
   }
 }

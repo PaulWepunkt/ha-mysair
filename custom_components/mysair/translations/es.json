@@ -179,7 +179,11 @@
     "command_failed": {
       "message": "No se pudo enviar la orden a MySair. Comprueba la conexión y vuelve a intentarlo."
     },
-    "no_medium_allowed": "No hay ningún medio permitido para esta zona en este modo. Revisa las opciones de la integración MySair.",
-    "floor_heating_disabled": "El suelo radiante está desactivado en las opciones de la integración MySair."
+    "no_medium_allowed": {
+      "message": "No hay ningún medio permitido para esta zona en este modo. Revisa las opciones de la integración MySair."
+    },
+    "floor_heating_disabled": {
+      "message": "El suelo radiante está desactivado en las opciones de la integración MySair."
+    }
   }
 }
