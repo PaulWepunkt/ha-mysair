@@ -258,7 +258,7 @@ updateFanMode:function(e){
 
 | `vv` | Bedeutung |
 |---|---|
-| `"0"` | Kein Lüftermodus (`hasFanMode()` → `false`) |
+| `"0"` | Kein Lüftermodus (`hasFanMode()` → `false`); das Lüftersymbol der App ist dann aus und schaltet beim Antippen auf `"4"` |
 | `"1"` / `"2"` / `"3"` | Manuelle Stufe 1 / 2 / 3 |
 | `"4"` | Automatik (in der App als „A“ angezeigt) |
 
@@ -266,4 +266,4 @@ updateFanMode:function(e){
 
 - **Befehl:** `command:"fanspeed"`, `value:""+i` (String des gewünschten `vv`: `"0"`, `"1"`, `"2"`, `"3"` oder `"4"`).
 - **Fähigkeit:** Das Bedienelement erscheint nur bei `allowFan()` (`"1"==this.v`) – in `status_parser.py` als `allow_fan` ausgewertet.
-- **Umsetzung:** `climate.py` stellt `fan_mode`/`fan_modes` bereit (HA `ClimateEntityFeature.FAN_MODE`), `"1"/"2"/"3"` unverändert und `"4"` ↔ `"auto"`; `async_set_fan_mode` sendet `fanspeed` über `api.send_zone_command`.
+- **Umsetzung:** `climate.py` stellt `fan_mode`/`fan_modes` bereit (HA `ClimateEntityFeature.FAN_MODE`): `"0"` ↔ `"off"`, `"1"/"2"/"3"` unverändert, `"4"` ↔ `"auto"`; `async_set_fan_mode` sendet `fanspeed` über `api.send_zone_command`. **Offen (ungeprüft):** was „kein Lüftermodus“ an der Anlage physisch bewirkt.

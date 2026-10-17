@@ -132,6 +132,9 @@
     },
     "stop_failed": {
       "message": "No se pudo parar la instalación. Comprueba la conexión con MySair y vuelve a intentarlo."
+    },
+    "command_failed": {
+      "message": "No se pudo enviar la orden a MySair. Comprueba la conexión y vuelve a intentarlo."
     }
   }
 }

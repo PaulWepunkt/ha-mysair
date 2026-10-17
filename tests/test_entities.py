@@ -709,7 +709,7 @@ async def test_climate_fan_mode_updates_from_mqtt_event(hass, monkeypatch):
 
     state = hass.states.get("climate.salon")
     assert state.attributes["fan_mode"] == "2"
-    assert set(state.attributes["fan_modes"]) == {"1", "2", "3", "auto"}
+    assert set(state.attributes["fan_modes"]) == {"off", "1", "2", "3", "auto"}
 
 
 async def test_climate_fan_mode_auto_mapping(hass, monkeypatch):
@@ -731,13 +731,32 @@ async def test_climate_fan_mode_none_when_not_allowed(hass, monkeypatch):
     assert state.attributes["fan_modes"] == []
 
 
-async def test_climate_fan_mode_none_when_wire_is_zero(hass, monkeypatch):
+async def test_climate_fan_mode_off_when_wire_is_zero(hass, monkeypatch):
+    # "0" = no fan mode active (the app's fan icon toggles between "0" and "4").
     await _setup_entry(hass, monkeypatch)
 
     _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="0"))
     await hass.async_block_till_done()
 
-    assert hass.states.get("climate.salon").attributes["fan_mode"] is None
+    state = hass.states.get("climate.salon")
+    assert state.attributes["fan_mode"] == "off"
+    assert state.attributes["fan_modes"] == ["off", "1", "2", "3", "auto"]
+
+
+async def test_climate_set_fan_mode_off_sends_zero(hass, monkeypatch):
+    calls = []
+    await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
+    _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="4"))
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate",
+        "set_fan_mode",
+        {"entity_id": "climate.salon", "fan_mode": "off"},
+        blocking=True,
+    )
+    assert calls[-1]["command_type"] == "fanspeed"
+    assert calls[-1]["value"] == "0"
 
 
 async def test_climate_set_fan_mode_sends_command(hass, monkeypatch):
@@ -1488,3 +1507,91 @@ async def test_stop_button_failure_shows_translated_error(hass, monkeypatch):
             "button", "press", {"entity_id": button}, blocking=True
         )
     assert err.value.translation_key == "stop_failed"
+
+
+# --- Failed commands are shown in the UI (translated HomeAssistantError) ---
+
+
+def _patch_failing_command(monkeypatch):
+    def _fail(self, ctl, device, command_type, value=None, temperature=None):
+        raise ConnectionError("backend unreachable")
+
+    monkeypatch.setattr(MySairAPI, "send_zone_command", _fail)
+
+
+async def test_failed_temperature_command_raises_and_restores_setpoint(
+    hass, monkeypatch
+):
+    await _setup_entry(hass, monkeypatch)
+    _fire_status(hass, "INST_A", _zone(temp_target=22.0))
+    await hass.async_block_till_done()
+    _patch_failing_command(monkeypatch)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": "climate.salon", "temperature": 25.0},
+            blocking=True,
+        )
+    assert err.value.translation_key == "command_failed"
+    assert hass.states.get("climate.salon").attributes["temperature"] == 22.0
+
+
+async def test_failed_hvac_mode_command_raises_and_keeps_state(hass, monkeypatch):
+    await _setup_entry(hass, monkeypatch)
+    _fire_status(hass, "INST_A", _zone(is_on=False))
+    await hass.async_block_till_done()
+    _patch_failing_command(monkeypatch)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "climate",
+            "set_hvac_mode",
+            {"entity_id": "climate.salon", "hvac_mode": "heat"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "command_failed"
+    assert hass.states.get("climate.salon").state == HVACMode.OFF
+
+
+async def test_failed_fan_mode_command_raises(hass, monkeypatch):
+    await _setup_entry(hass, monkeypatch)
+    _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="1"))
+    await hass.async_block_till_done()
+    _patch_failing_command(monkeypatch)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "climate",
+            "set_fan_mode",
+            {"entity_id": "climate.salon", "fan_mode": "auto"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "command_failed"
+    assert hass.states.get("climate.salon").attributes["fan_mode"] == "1"
+
+
+@pytest.mark.parametrize(
+    "entity_id, service, is_on",
+    [
+        ("switch.salon_power", "turn_on", False),
+        ("switch.salon_power", "turn_off", True),
+        ("switch.salon_floor_heating", "turn_on", True),
+    ],
+)
+async def test_failed_switch_command_raises_and_keeps_state(
+    hass, monkeypatch, entity_id, service, is_on
+):
+    await _setup_entry(hass, monkeypatch)
+    _fire_status(hass, "INST_A", _zone(is_on=is_on, allow_floor=True, is_floor=False))
+    await hass.async_block_till_done()
+    before = hass.states.get(entity_id).state
+    _patch_failing_command(monkeypatch)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "switch", service, {"entity_id": entity_id}, blocking=True
+        )
+    assert err.value.translation_key == "command_failed"
+    assert hass.states.get(entity_id).state == before

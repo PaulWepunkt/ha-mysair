@@ -14,6 +14,8 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - **Option „Fußbodenkühlung erlauben“** (Standard: aus) unter Einstellungen → Geräte & Dienste → MySair → Konfigurieren. Ausgeschaltet nutzt die Integration den Fußboden nicht, solange die Anlage kühlt, weil MySair keinen Taupunktschutz meldet.
 - **Eigenes Gerät für die Installation** (die MySair-Steuerung) mit ihrer Software-Version. Die Geräte bilden jetzt einen Baum: Konto (Cloud-Verbindung) → Installation → Zonen.
 - **Neue Entitäten je Installation:** Auswahl „Betriebsart“ (Heizen/Kühlen, auch wenn alle Zonen aus sind; umstellbar nur, solange alle Zonen aus sind, wie der Saisonwechsel in der App), Knopf „Anlage stoppen“, „In Betrieb“ (mindestens eine Zone läuft), „Hauptzone“ (Diagnose) und „Heiz-/Kühlkonflikt“ (Diagnose; meldet ein Problem, wenn laufende Zonen unterschiedliche Richtungen haben).
+- **Fehlermeldung, wenn ein Befehl nicht gesendet werden kann** (z. B. ohne Internet oder bei einer Störung von MySair). Bisher stand das nur im Log; die Anzeige bleibt jetzt beim bisherigen Wert, statt einen nicht ausgeführten Wert zu zeigen.
+- **Lüfter „Aus“:** Der Wert `vv` = `"0"` (kein Lüftermodus, in der App das ausgeschaltete Lüftersymbol) wird als Lüftermodus „Aus“ angezeigt und lässt sich auch wählen. Bisher stand dort „Unbekannt“.
 - **Verständliche Fehlermeldungen in der Oberfläche** auf Deutsch, Englisch und Spanisch, wenn eine Bedienung nicht erlaubt ist (Richtungswechsel bei laufender Anlage, Fußbodenkühlung ausgeschaltet, Richtung noch unbekannt).
 
 ### Changed

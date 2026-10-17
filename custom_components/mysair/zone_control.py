@@ -36,6 +36,17 @@ def control_error(translation_key: str) -> ServiceValidationError:
     )
 
 
+def command_error(err: Exception) -> HomeAssistantError:
+    """Translated error for a command that could not be sent to MySair.
+
+    Shown in the Home Assistant UI instead of failing silently; the technical
+    cause stays in the log.
+    """
+    return HomeAssistantError(
+        translation_domain=DOMAIN, translation_key="command_failed"
+    )
+
+
 def floor_cooling_allowed(entry) -> bool:
     """Whether the user allowed the floor to be used for cooling."""
     return bool(entry.options.get(CONF_ALLOW_FLOOR_COOLING, False))

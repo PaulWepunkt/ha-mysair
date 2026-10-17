@@ -20,7 +20,7 @@ Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezei
 
 | Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
-| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfterstufe (1–3 oder Automatik, sofern die Zone das unterstützt) |
+| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfter (Aus, Stufe 1–3 oder Automatik, sofern die Zone das unterstützt). Scheitert ein Befehl, erscheint eine Fehlermeldung, und die Anzeige bleibt beim bisherigen Wert |
 | Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus. Einschalten wie in der MySair-App: Klimaanlage an, Fußboden wie zuletzt, Richtung der Anlage, aktuelle Soll-Temperatur |
 | Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußboden ein/aus, kombinierbar mit der Klimaanlage derselben Zone; „an“ nur, solange die Zone läuft. Bleibt weder Klimaanlage noch Fußboden an, wird die Zone ausgeschaltet. In Zonen ohne Fußboden „nicht verfügbar“ |
 | Temperatur | `sensor.<zone>_temperatur` | Aktuelle Raumtemperatur |
