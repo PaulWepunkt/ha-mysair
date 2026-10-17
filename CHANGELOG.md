@@ -8,6 +8,8 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-17
+
 ### Added
 - **„Betriebsart festhalten“** (Einstellungs-Entität am Installationsgerät, ab Werk aus): Für Anlagen, deren Wärmepumpe nicht von MySair umgeschaltet wird. Ist sie an, beschreibt „Betriebsart“ die Richtung der Wärmepumpe: jederzeit umstellbar ohne etwas zu senden, über einen Neustart erhalten; Home Assistant schaltet Zonen nur noch in dieser Richtung ein.
 - **„Betriebsart weicht ab“** (Binärsensor): meldet ein Problem, wenn bei festgehaltener Betriebsart Zonen in der anderen Richtung laufen, z. B. am Thermostat oder in der App eingeschaltet.
