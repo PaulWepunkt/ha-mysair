@@ -80,5 +80,30 @@
         "name": "Suelo radiante"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de MySair",
+        "description": "Ajustes de comportamiento de la integración.",
+        "data": {
+          "allow_floor_cooling": "Permitir suelo refrescante"
+        },
+        "data_description": {
+          "allow_floor_cooling": "Actívalo solo si la instalación está preparada para suelo refrescante y protegida contra condensaciones (punto de rocío). Desactivado, Home Assistant no usa el suelo mientras la instalación enfría."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "direction_locked": {
+      "message": "La instalación funciona en el otro modo (calor/frío). Apaga primero todas las zonas y después elige el nuevo modo."
+    },
+    "direction_unknown": {
+      "message": "Todavía no se conoce el modo (calor/frío) de la instalación. Espera al primer estado de MySair."
+    },
+    "floor_cooling_disabled": {
+      "message": "El suelo refrescante está desactivado en las opciones de la integración MySair."
+    }
   }
 }

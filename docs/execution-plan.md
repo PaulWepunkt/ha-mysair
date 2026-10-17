@@ -43,14 +43,14 @@
 ## Wichtige Entscheidungen und Erkenntnisse
 
 - **Befehle per HTTP, Zustand per MQTT.** Die MQTT-Verbindung ist reiner Empfang; daran richtet sich die gesamte Architektur aus (`docs/architecture.md`).
-- **Nichts erfinden.** Felder und Befehle werden nur umgesetzt, wenn sie im Code der offiziellen App oder in echten Nachrichten belegt sind. Deshalb fehlen Timer/Programme (F6) und bleiben `vf`/`hmh`/`mh`/`p`/`ps` uninterpretiert.
+- **Nichts erfinden.** Felder und Befehle werden nur umgesetzt, wenn sie im Code der offiziellen App oder in echten Nachrichten belegt sind. Deshalb bleiben `vf`/`hmh`/`mh`/`p`/`ps` uninterpretiert. Gewissheitsstufen unterscheiden: belegt im Code der App, belegt in echten Nachrichten, unbekannt.
 - **Echte Nachrichten finden, was Tests nicht finden.** Die Fehler aus Aufgabe 19 und die Ursache der Verbindungsabbrüche (Aufgabe 20) ließen sich weder aus dem statischen JS noch mit Unit-Tests erkennen, weil die Mocks die vermutete statt der tatsächlichen Form nachbildeten.
 - **Gewissheit nicht vorschnell herabstufen.** „Im Bundle nicht gefunden“ erst nach einer Wiederholung mit Varianten werten (Beispiel `sv`, `known-unknowns.md` #26). Umgekehrt: Bei Demo-Seiten im Bundle prüfen, ob der Code zum echten Datenfluss gehört (Beispiel `vv`, `protocol-findings.md` §9).
 - **Ein einzelner Messwert ist kein Beweis.** Die Annahme, `hum` sei das Feuchtefeld, beruhte auf einer Anlage ohne Feuchtemessung, bei der beide Felder `"0"` meldeten (`known-unknowns.md` #25).
 - **Fehlerklassifizierung nach Bereich.** Das Backend antwortet bei einem gelöschten `refresh_token` mit `404`. Eine Liste einzelner Codes übersah das und verhinderte die erneute Anmeldung; seither gilt: 5xx/429 vorübergehend, sonst Reauth.
 - **Bestehende Entity-IDs bleiben erhalten.** Bei Namensänderungen (Umstieg auf `has_entity_name`, Übersetzungen) gilt das Register; neue IDs entstehen nur bei Neueinrichtung.
 - **Keine Abhängigkeit ohne Not.** Kein `paho-mqtt` (E6), kein `boto3`, kein `voluptuous` im reinen Parser.
-- **Abgrenzungen:** nur der erste Standort (#15); keine Timer/Programme (F6); kein zusätzlicher PR an `home-assistant/brands` für HA-Versionen vor 2026.3.0.
+- **Abgrenzungen:** nur der erste Standort (#15); kein zusätzlicher PR an `home-assistant/brands` für HA-Versionen vor 2026.3.0.
 
 ## Offen
 

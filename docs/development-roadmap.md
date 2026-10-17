@@ -80,7 +80,7 @@
 | F3 | Modus `auto`, falls das System ihn kennt. | ✅ geprüft – **vom Protokoll nicht unterstützt** (`m` 0–5 deckt genau die sechs Kombinationen ab). Ungenutzte Konstante entfernt. |
 | F4 | Funktionierendes `select` für den Modus. | ✅ erledigt als **Umwidmung**: Das alte `select.py` doppelte `climate.hvac_mode`. Stattdessen gibt es einen Schalter „Fußbodenheizung“ je Zone, der den vorhandenen Befehl `mode` nutzt. |
 | F5 | Dienst `mysair.stop_installation` (Befehl `stop`, `value:"1"`). | ✅ erledigt – einmal je Domain registriert, nach dem letzten Entladen entfernt. |
-| F6 | Timer (`temporizer`) und Programme (`programs`). | 🟢 bewusst nicht umgesetzt – das Format zum Setzen ist im Bundle nicht entschlüsselt (es gibt nicht einmal ein `setPrograms`); eine Umsetzung würde erfundene Felder erfordern. Wieder aufgreifen nur mit einem echten Mitschnitt. Siehe `known-unknowns.md` #27. |
+| F6 | Timer (`temporizer`) und Programme (`programs`, `update-program`, `delete-program`). | 🟡 geplant – Befehle im Bundle gefunden; das Programmobjekt muss vor der Umsetzung mit echtem Datenverkehr bestätigt werden. Siehe `known-unknowns.md` #27. |
 
 ---
 
@@ -98,7 +98,7 @@
 
 ## Offen (ohne Phasennummer)
 
-- **Schutz vor widersprüchlicher Heiz-/Kühlrichtung** für Anlagen, deren Außeneinheit nur eine Richtung für alle Zonen kann – 🟠.
+- ✅ **Schutz vor widersprüchlicher Heiz-/Kühlrichtung** wie in der App (`protocol-findings.md` §4b, `zone_control.py`).
 - **Fehler bei Befehlen sichtbar machen** (`HomeAssistantError` mit übersetzter Meldung) – 🟡.
 - **Tests für doppelte/vertauschte MQTT-Nachrichten** und für `account_mismatch` im Reauth – 🟢.
 - **Uninterpretierte Zonenfelder** `vf`/`hmh`/`mh`/`p`/`ps` – nur mit neuen Belegen (`known-unknowns.md` §6).

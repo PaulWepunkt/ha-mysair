@@ -13,7 +13,8 @@ from .availability import AvailabilityMixin
 from .command_feedback import CommandFeedbackMixin
 from .const import DOMAIN
 from .device import zone_device_info
-from .coordinator import signal_zone_update
+from .coordinator import signal_installation_update, signal_zone_update
+from .zone_control import allowed_directions, control_error, turn_on_mode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     api = data["api"]
     mqtt_client = data["mqtt"]
+    coordinator = data["coordinator"]
     devices = data["devices"]
 
     entities = []
@@ -38,7 +40,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             dev_id = dev.get("reference") or dev.get("rf") or dev.get("id")
             name = dev.get("name", f"Zone {dev_id}")
             entities.append(
-                MySairThermostat(hass, api, mqtt_client, inst_ref, dev_id, name)
+                MySairThermostat(
+                    hass, api, mqtt_client, coordinator, entry, inst_ref, dev_id, name
+                )
             )
 
     async_add_entities(entities)
@@ -60,10 +64,14 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
     _attr_has_entity_name = True
     _attr_name = None
 
-    def __init__(self, hass, api, mqtt_client, inst_ref, device_id, name):
+    def __init__(
+        self, hass, api, mqtt_client, coordinator, entry, inst_ref, device_id, name
+    ):
         self.hass = hass
         self.api = api
         self.mqtt_client = mqtt_client
+        self.coordinator = coordinator
+        self._entry = entry
         self.inst_ref = inst_ref
         self.device_id = device_id
         self._attr_unique_id = f"mysair_{inst_ref}_{device_id}"
@@ -81,6 +89,7 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         self._fan_mode = None
         self._attr_fan_modes = []
         self._unsub = None
+        self._unsub_installation = None
         self._init_command_feedback()
         self._init_availability()
 
@@ -93,12 +102,21 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
             signal_zone_update(self.inst_ref, self.device_id),
             self._handle_zone_update,
         )
+        # The allowed modes depend on the other zones (direction lock).
+        self._unsub_installation = async_dispatcher_connect(
+            self.hass,
+            signal_installation_update(self.inst_ref),
+            self._handle_installation_update,
+        )
         self._start_feedback_listener()
 
     async def async_will_remove_from_hass(self):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        if self._unsub_installation:
+            self._unsub_installation()
+            self._unsub_installation = None
         self._stop_feedback_listener()
         self._stop_availability()
 
@@ -160,40 +178,46 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
             _LOGGER.error(f"[MySair Climate] Failed to send temperature change: {e}")
 
     async def async_set_hvac_mode(self, hvac_mode):
-        if hvac_mode not in self._attr_hvac_modes:
+        """Turn the zone off, or on in heat/cool, following the app's rules.
+
+        Heat/cool is a property of the whole installation: while any zone
+        is on, only its current direction is offered (see zone_control.py).
+        """
+        if hvac_mode == HVACMode.OFF:
+            await self._async_send_mode_change(HVACMode.OFF, "power", None)
+            return
+        if hvac_mode not in (HVACMode.HEAT, HVACMode.COOL):
             _LOGGER.warning(f"[MySair Climate] Invalid HVAC mode: {hvac_mode}")
             return
+        if hvac_mode == self._hvac_mode:
+            return
 
+        is_heat = hvac_mode == HVACMode.HEAT
+        zone = self.coordinator.zone(self.inst_ref, self.device_id) or {}
+        if is_heat not in allowed_directions(self.coordinator, self.inst_ref, zone):
+            raise control_error("direction_locked")
+        mode_value = turn_on_mode(
+            self.coordinator, self._entry, self.inst_ref, self.device_id, is_heat
+        )
+        await self._async_send_mode_change(hvac_mode, "mode", mode_value)
+
+    async def _async_send_mode_change(self, hvac_mode, command, mode_value):
         previous_mode = self._hvac_mode
         try:
-            response = None
-            if hvac_mode == HVACMode.HEAT:
+            if command == "mode":
                 _LOGGER.debug(
-                    f"[MySair Climate] Turning on {self.name} in HEAT at {self._target_temperature}°C"
+                    f"[MySair Climate] Turning on {self.name} with m={mode_value} "
+                    f"at {self._target_temperature}°C"
                 )
                 response = await self.hass.async_add_executor_job(
                     self.api.send_zone_command,
                     self.inst_ref,
                     self.device_id,
                     "mode",
-                    "0",
+                    mode_value,
                     self._target_temperature,
                 )
-
-            elif hvac_mode == HVACMode.COOL:
-                _LOGGER.debug(
-                    f"[MySair Climate] Turning on {self.name} in COOL at {self._target_temperature}°C"
-                )
-                response = await self.hass.async_add_executor_job(
-                    self.api.send_zone_command,
-                    self.inst_ref,
-                    self.device_id,
-                    "mode",
-                    "1",
-                    self._target_temperature,
-                )
-
-            elif hvac_mode == HVACMode.OFF:
+            else:
                 _LOGGER.debug(f"[MySair Climate] Turning off {self.name}")
                 response = await self.hass.async_add_executor_job(
                     self.api.send_zone_command, self.inst_ref, self.device_id, "power"
@@ -241,26 +265,18 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_turn_on(self):
-        """Turn the zone on, restoring its previous mode.
+        """Turn the zone on like the app's power button.
 
-        If it was off there is no previous mode to restore: heat is preferred
-        (turning on must never force cool, see docs/protocol-findings.md),
-        falling back to the first mode the zone allows. Previously heat was
-        chosen without checking capabilities, so in a cool-only zone the guard
-        in ``async_set_hvac_mode`` rejected the mode and ``climate.turn_on``
-        silently did nothing.
+        Uses the heat/cool direction of the installation, turns the air on,
+        keeps the floor setting and the current setpoint (zone_control.py).
         """
         if self._hvac_mode != HVACMode.OFF:
-            next_mode = self._hvac_mode
-        else:
-            available = [m for m in self._attr_hvac_modes if m != HVACMode.OFF]
-            if not available:
-                _LOGGER.warning(
-                    f"[MySair Climate] {self._zone_name} supports no mode to turn on"
-                )
-                return
-            next_mode = HVACMode.HEAT if HVACMode.HEAT in available else available[0]
-        await self.async_set_hvac_mode(next_mode)
+            return
+        mode_value = turn_on_mode(
+            self.coordinator, self._entry, self.inst_ref, self.device_id
+        )
+        hvac_mode = HVACMode.COOL if int(mode_value) % 2 else HVACMode.HEAT
+        await self._async_send_mode_change(hvac_mode, "mode", mode_value)
 
     # ------------------------------------------------------------------
     # MQTT EVENTS → STATE UPDATE
@@ -281,14 +297,7 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         if zone.get("temp_max") is not None:
             self._attr_max_temp = zone.get("temp_max")
 
-        # Actual heat/cool availability based on the zone's capabilities
-        # (c/f, see docs/protocol-findings.md). OFF is always allowed.
-        modes = [HVACMode.OFF]
-        if zone.get("allow_heat"):
-            modes.append(HVACMode.HEAT)
-        if zone.get("allow_cool"):
-            modes.append(HVACMode.COOL)
-        self._attr_hvac_modes = modes
+        self._update_hvac_modes(zone)
 
         # Fan speed (vv/fanspeed, see docs/protocol-findings.md §9).
         self._attr_fan_modes = list(_FAN_MODES) if zone.get("allow_fan") else []
@@ -317,3 +326,24 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
             f"{self._target_temperature}°C / {self._hvac_mode}"
         )
         self.async_write_ha_state()
+
+    @callback
+    def _handle_installation_update(self):
+        """Another zone changed: the direction lock may have changed."""
+        zone = self.coordinator.zone(self.inst_ref, self.device_id)
+        if zone is None:
+            return
+        modes = self._attr_hvac_modes
+        self._update_hvac_modes(zone)
+        if modes != self._attr_hvac_modes:
+            self.async_write_ha_state()
+
+    def _update_hvac_modes(self, zone):
+        """OFF plus heat/cool by capability (c/f) and installation direction."""
+        directions = allowed_directions(self.coordinator, self.inst_ref, zone)
+        modes = [HVACMode.OFF]
+        if True in directions:
+            modes.append(HVACMode.HEAT)
+        if False in directions:
+            modes.append(HVACMode.COOL)
+        self._attr_hvac_modes = modes

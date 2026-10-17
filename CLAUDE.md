@@ -86,12 +86,13 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `mqtt_handler.py` | `MySairMQTTClient`: MQTT von Hand über WebSocket (`websocket-client`), Empfangspuffer, Backoff, vorausschauende Erneuerung |
 | `coordinator.py` | `MySairCoordinator`: einziger Abonnent von `mysair_update` je Config Entry; verteilt jede Zone über den Dispatcher |
 | `command_feedback.py` | `CommandFeedbackMixin`: ordnet Befehle der Quittung aus `mysair_feedback` zu und setzt bei Zeitüberschreitung zurück (climate/switch) |
+| `zone_control.py` | Regeln der App für Einschalten, Richtung der Anlage und Fußboden; übersetzte Fehler (`ServiceValidationError`) |
 | `availability.py` | `AvailabilityMixin`: `should_poll=False` + `available` nach Aktualität des letzten MQTT-Status |
 | `device.py` | `zone_device_info`/`account_device_info`: gemeinsames Gerät für alle Entitäten einer Zone bzw. für das Konto. Der Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`) |
 | `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
 | `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) |
-| `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort) und Reauth |
+| `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen („Fußbodenkühlung erlauben“) |
 | `const.py` | Konstanten (Zeitlimits, Abfrageintervall des Verbindungssensors, Dienstname) |
 | `diagnostics.py` | Diagnose-Download in der HA-Oberfläche mit geschwärzten Zugangsdaten/Token |
 | `services.yaml` | Schema des Dienstes `mysair.stop_installation` |
@@ -243,15 +244,15 @@ Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.m
 - **Eindeutige MQTT-`client_id` je Verbindung**, sonst verdrängen sich Integration und offizielle App gegenseitig.
 - **Entity-IDs:** Mit `has_entity_name` bildet HA die IDs aus Gerät (= Zonenname) und Entitätsname in der eingestellten Sprache. Bestehende Installationen behalten ihre IDs, solange die `unique_id` gleich bleibt (dafür gibt es einen Test). `unique_id`s nie ändern.
 - **Erfolg von `/send/instruction`** = HTTP 201 + leere Liste `error`. Den Text in `msg` nie vergleichen: Er hängt von der Kontosprache ab (`"Creado"`, `"Created"` …).
+- **Richtung der Anlage wie in der App** (`protocol-findings.md` §4b, `zone_control.py`): Läuft eine Zone, sind nur „Aus“ und die aktuelle Richtung erlaubt. Einschalten = Luft an, Fußboden wie bisher, Richtung der Anlage, aktuelle Soll-Temperatur. Fußboden beim Kühlen nur mit der Option `allow_floor_cooling`. `stop` geht an die Hauptzone (`pl`).
 - **Verwaiste Zonen** werden bei jedem Setup/Reload entfernt (`_cleanup_stale_zone_devices`); das Kontogerät (Kennung `entry_id`) bleibt unangetastet.
 
 Offen:
-- 🟠 **Widersprüchliche Heiz-/Kühlrichtung** zwischen Zonen wird nicht verhindert.
-- 🟡 **Fehler bei Befehlen** erscheinen nur im Log, nicht in der Oberfläche.
+- 🟡 **Fehler beim Senden von Befehlen** erscheinen nur im Log, nicht in der Oberfläche (abgelehnte Bedienungen wie ein gesperrter Richtungswechsel werden bereits übersetzt angezeigt).
 - 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
 - 🟡 **Uninterpretierte Zonenfelder** `vf`, `hmh`, `mh`, `p`, `ps` (`docs/known-unknowns.md`).
+- 🟡 **Timer und Programme** (F6, `known-unknowns.md` #27): Befehle bekannt; das Programmobjekt vor der Umsetzung mit echtem Datenverkehr bestätigen.
 
 Abgrenzungen (keine Fehler):
 - **Nur der erste Standort** (`known-unknowns.md` #15).
-- **Keine Timer/Programme** (F6, `known-unknowns.md` #27): Das Format zum Setzen ist nicht entschlüsselt; nur mit einem echten Mitschnitt wieder aufgreifen.
 - **Kein zusätzlicher PR an `home-assistant/brands`**: Nutzer von HA vor 2026.3.0 sehen Symbol und Logo erst nach einem Update.

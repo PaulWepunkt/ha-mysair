@@ -61,8 +61,9 @@ ha-mysair/
 | `refresh_status_periodic` | `__init__.py` | Fordert alle 120 s per HTTP den Zustand jeder Installation an | Hintergrund-Task der Config Entry |
 | `MySairAPI` | `api.py` | Anmeldung, Token-Erneuerung, AWS-Zugangsdaten, Erkennung, Befehle, SigV4-Signatur | Executor (blockierend) |
 | `MySairMQTTClient` | `mqtt_handler.py` | WSS-Verbindung, CONNECT/SUBSCRIBE von Hand, Wiederverbindung mit Backoff, vorausschauende Erneuerung der Zugangsdaten | eigener Daemon-Thread |
-| `MySairCoordinator` | `coordinator.py` | Hört **einmal** je Config Entry auf `mysair_update`, filtert nach eigener Installation und verteilt jede Zone einzeln über `homeassistant.helpers.dispatcher` | Event-Loop |
-| Entitäten | `climate.py`, `sensor.py`, `switch.py` | Abonnieren das Dispatcher-Signal ihrer Zone (`signal_zone_update`) und aktualisieren ihren Zustand | Event-Loop |
+| `MySairCoordinator` | `coordinator.py` | Hört **einmal** je Config Entry auf `mysair_update`, filtert nach eigener Installation und verteilt jede Zone einzeln über `homeassistant.helpers.dispatcher`; danach ein Signal je Installation (`signal_installation_update`). Liefert den Zustand der Anlage (Richtung, an/aus, Hauptzone) über `installation_state()` | Event-Loop |
+| Entitäten | `climate.py`, `sensor.py`, `switch.py` | Abonnieren das Dispatcher-Signal ihrer Zone (`signal_zone_update`) und aktualisieren ihren Zustand; Thermostate zusätzlich das Signal der Installation, weil die erlaubten Modi von den anderen Zonen abhängen | Event-Loop |
+| Steuerregeln | `zone_control.py` | Wählt beim Einschalten und beim Umschalten des Fußbodens den Befehl nach den Regeln der App (`protocol-findings.md` §4b) | Event-Loop |
 
 ### Abhängigkeiten zwischen Modulen (Bestätigt)
 

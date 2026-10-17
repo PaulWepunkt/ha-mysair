@@ -20,9 +20,9 @@ Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezei
 
 | Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
-| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfterstufe (1–3 oder Automatik, sofern die Zone das unterstützt) |
-| Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus; beim Einschalten bleibt der zuletzt genutzte Modus erhalten |
-| Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußbodenheizung ein/aus, kombinierbar mit der Klimaanlage derselben Zone. In Zonen ohne Fußbodenheizung „nicht verfügbar“ |
+| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfterstufe (1–3 oder Automatik, sofern die Zone das unterstützt) |
+| Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus. Einschalten wie in der MySair-App: Klimaanlage an, Fußboden wie zuletzt, Richtung der Anlage, aktuelle Soll-Temperatur |
+| Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußboden ein/aus, kombinierbar mit der Klimaanlage derselben Zone; „an“ nur, solange die Zone läuft. Bleibt weder Klimaanlage noch Fußboden an, wird die Zone ausgeschaltet. In Zonen ohne Fußboden „nicht verfügbar“ |
 | Temperatur | `sensor.<zone>_temperatur` | Aktuelle Raumtemperatur |
 | Soll-Temperatur | `sensor.<zone>_soll_temperatur` | Eingestellte Zieltemperatur |
 | Modus | `sensor.<zone>_modus` | Aktueller Modus (`off`/`heat`/`cool`/`on`, angezeigt als Aus/Heizen/Kühlen/Ein). Das Attribut `medium` (`air`/`floor`/`air_and_floor`, angezeigt als Luft/Fußboden/Luft und Fußboden) gibt an, welches Medium aktiv ist; es bleibt auch bei ausgeschalteter Zone erhalten |
@@ -57,13 +57,27 @@ Einstellungen → Geräte & Dienste → Integration hinzufügen → **MySair** �
 - Das Passwort wird **nicht gespeichert**: Es dient einmalig dazu, ein `refresh_token` zu erhalten. Nur dieses wird gespeichert und erneuert die Sitzung bei jedem Start (siehe [`docs/security-and-privacy.md`](docs/security-and-privacy.md)).
 - Wird die Sitzung ungültig (z. B. weil das `refresh_token` abgelaufen ist), fordert Home Assistant über die Integration eine erneute Anmeldung an; die bestehende Konfiguration bleibt dabei erhalten.
 
+### Optionen
+
+Einstellungen → Geräte & Dienste → MySair → **Konfigurieren**:
+
+- **Fußbodenkühlung erlauben** (Standard: aus). Ausgeschaltet nutzt Home Assistant den Fußboden nicht, solange die Anlage kühlt: Beim Einschalten wird nur die Klimaanlage gestartet, und der Schalter „Fußbodenheizung“ meldet einen Fehler. Nur einschalten, wenn die Anlage für Fußbodenkühlung ausgelegt und gegen Kondenswasser (Taupunkt) geschützt ist. Die Einstellung wirkt sofort, ohne Neuladen.
+
+## Heizen und Kühlen
+
+Eine MySair-Anlage hat **eine** Richtung (Heizen oder Kühlen) für alle Zonen. Die Integration übernimmt die Regeln der offiziellen App:
+
+- **Läuft mindestens eine Zone**, bieten alle Thermostate nur „Aus“ und die aktuelle Richtung an.
+- **Sind alle Zonen aus**, kann eine Zone in beiden Richtungen eingeschaltet werden; damit wechselt die Richtung der ganzen Anlage.
+- Um die Richtung zu wechseln, also zuerst alle Zonen ausschalten (z. B. mit dem Dienst „Anlage stoppen“) und dann eine Zone in der neuen Richtung einschalten.
+- Der Dienst **„Anlage stoppen“** (`mysair.stop_installation`) wird wie in der App an die Hauptzone der Anlage gesendet.
+
 ## Bekannte Einschränkungen
 
 - **Nach einem Start oder Neuladen dauert es einige Sekunden, bis echte Werte erscheinen**: Bis zum ersten Status per MQTT sind die Entitäten „nicht verfügbar“ (ebenso, wenn die Verbindung länger als 6 Minuten unterbrochen ist), statt Standardwerte als Echtzeitdaten auszugeben.
 - **Nur die erste `Location`** des Kontos: Bei mehreren Standorten werden nur die Installationen des ersten geladen (bewusste Abgrenzung, siehe `docs/known-unknowns.md` #15).
-- **Keine Zeitprogramme oder Timer**: Das Backend bietet keinen bestätigten Weg, sie zu setzen (nur zu lesen); das Format zu raten, wäre nicht verantwortbar (bewusste Abgrenzung, siehe `docs/known-unknowns.md` #27).
+- **Noch keine Zeitprogramme oder Timer**: Die Befehle sind bekannt, die Umsetzung ist geplant (siehe `docs/known-unknowns.md` #27).
 - **Kein automatischer Heiz-/Kühlmodus**: Das ist keine Lücke der Integration – das Protokoll selbst kennt keinen automatischen Wechsel zwischen Heizen und Kühlen (siehe `docs/protocol-findings.md` §4). Die einzige echte Automatik des Systems ist die Lüfterstufe, und die ist umgesetzt.
-- **Heizen/Kühlen wird je Zone gesetzt**: Arbeitet die Außeneinheit einer Anlage nur in einer Richtung für alle Zonen, verhindert die Integration widersprüchliche Einstellungen derzeit nicht. In diesem Fall die Richtung für alle Zonen einheitlich wählen.
 - Erfordert Home Assistant **≥ 2026.8.0**.
 
 ## Technische Dokumentation

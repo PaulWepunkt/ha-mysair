@@ -8,7 +8,7 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mysair.const import DOMAIN
+from custom_components.mysair.const import CONF_ALLOW_FLOOR_COOLING, DOMAIN
 from custom_components.mysair.api import (
     MySairAPI,
     MySairAuthError,
@@ -163,3 +163,24 @@ async def test_reauth_flow_invalid_auth_shows_error(hass, monkeypatch):
     assert result2["errors"] == {"base": "invalid_auth"}
     # The refresh_token does not change if reauthentication fails.
     assert entry.data["refresh_token"] == "STALE"
+
+
+async def test_options_flow_floor_cooling_defaults_off_and_saves(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="user@example.com",
+        data={"email": "user@example.com", "refresh_token": "R"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    defaults = {str(key): key.default() for key in result["data_schema"].schema}
+    assert defaults == {CONF_ALLOW_FLOOR_COOLING: False}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={CONF_ALLOW_FLOOR_COOLING: True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == {CONF_ALLOW_FLOOR_COOLING: True}

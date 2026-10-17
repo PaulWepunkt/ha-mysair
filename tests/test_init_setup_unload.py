@@ -300,7 +300,9 @@ async def test_stop_installation_service_calls_api(hass, monkeypatch):
     monkeypatch.setattr(
         MySairAPI,
         "send_installation_command",
-        lambda self, ctl, command_type: calls.append((ctl, command_type)),
+        lambda self, ctl, command_type, value=None, device="": calls.append(
+            (ctl, command_type, device)
+        ),
     )
 
     entry = _make_entry()
@@ -313,8 +315,29 @@ async def test_stop_installation_service_calls_api(hass, monkeypatch):
     await hass.services.async_call(
         DOMAIN, SERVICE_STOP_INSTALLATION, {"installation_ref": "INST_A"}, blocking=True
     )
+    # No status yet: the main zone is unknown, the device stays empty.
+    assert calls == [("INST_A", "stop", "")]
 
-    assert calls == [("INST_A", "stop")]
+    # Like the official app, the stop goes to the main zone (pl="1").
+    hass.bus.async_fire(
+        f"{DOMAIN}_update",
+        {
+            "topic": "pro/v1/get/ctl/INST_A/status",
+            "data": {
+                "ctl": "INST_A",
+                "zones": [
+                    {"zone_id": "DEV_1", "is_main": False},
+                    {"zone_id": "DEV_2", "is_main": True},
+                ],
+            },
+        },
+    )
+    await hass.async_block_till_done()
+    calls.clear()
+    await hass.services.async_call(
+        DOMAIN, SERVICE_STOP_INSTALLATION, {"installation_ref": "INST_A"}, blocking=True
+    )
+    assert calls == [("INST_A", "stop", "DEV_2")]
 
 
 async def test_stop_installation_service_unknown_installation_raises(hass, monkeypatch):

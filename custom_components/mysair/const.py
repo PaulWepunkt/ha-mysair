@@ -22,3 +22,8 @@ SCAN_INTERVAL = 60  # seconds
 # Service mysair.stop_installation (F5)
 SERVICE_STOP_INSTALLATION = "stop_installation"
 ATTR_INSTALLATION_REF = "installation_ref"
+
+# Options flow: allow the floor to be used while the installation cools.
+# Off by default: floor cooling needs dew-point protection that MySair does
+# not report, so it has to be enabled consciously.
+CONF_ALLOW_FLOOR_COOLING = "allow_floor_cooling"

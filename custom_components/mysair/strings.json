@@ -80,5 +80,30 @@
         "name": "Floor heating"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MySair options",
+        "description": "Behaviour settings of the integration.",
+        "data": {
+          "allow_floor_cooling": "Allow floor cooling"
+        },
+        "data_description": {
+          "allow_floor_cooling": "Only enable this if the installation is designed for floor cooling and protected against condensation (dew point). When disabled, Home Assistant does not use the floor while the installation is cooling."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "direction_locked": {
+      "message": "The installation is running in the other heat/cool direction. Turn off all zones first, then choose the new direction."
+    },
+    "direction_unknown": {
+      "message": "The heat/cool direction of the installation is not known yet. Wait for the first status from MySair."
+    },
+    "floor_cooling_disabled": {
+      "message": "Floor cooling is disabled in the MySair integration options."
+    }
   }
 }
