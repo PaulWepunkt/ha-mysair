@@ -94,7 +94,7 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `binary_sensor.py` | Je Installation: „In Betrieb“ (mindestens eine Zone an), „Heiz-/Kühlkonflikt“ (Diagnose) und „Betriebsart weicht ab“ (nur mit „Betriebsart festhalten“) |
 | `select.py` | Je Installation: „Betriebsart“ (Heizen/Kühlen); Wechsel nur bei ausgeschalteter Anlage, wird wie in der App nur lokal gemerkt (`MySairCoordinator.choose_direction`). Mit „Betriebsart festhalten“ (Schalter in `switch.py`) ist sie die festgehaltene Richtung der Wärmepumpe (`InstallationState.held_is_heat`, über `RestoreEntity` gespeichert). Je Zone: „Heizen mit“/„Kühlen mit“ (Einstellungs-Entitäten, Wahl als Extra-Daten über `RestoreEntity` gespeichert) |
 | `button.py` | Je Installation: „Anlage stoppen“ (`zone_control.async_stop_installation`, wie der Dienst) |
-| `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe, Luftfeuchte und Fähigkeiten der Zone als Attribute `CAPABILITY_ATTRIBUTES`) |
+| `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe, Luftfeuchte, Fähigkeiten und Rohwerte `e`/`m`/`vv` der Zone als Attribute `CAPABILITY_ATTRIBUTES`/`RAW_ATTRIBUTES`) |
 | `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Hauptzone“ (Diagnose) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) je Zone; je Installation `MySairHoldDirectionSwitch` („Betriebsart festhalten“, Einstellungs-Entität) |
 | `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen (erlaubte Medien je Richtung, `MEDIA_PERMISSION_KEYS` in `const.py`) |

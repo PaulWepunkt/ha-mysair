@@ -50,6 +50,14 @@ CAPABILITY_ATTRIBUTES = {
     "has_programs": "allow_programs",
 }
 
+# Raw MySair codes of the zone, for comparing with the app and the manuals:
+# attribute -> parsed zone field (e = power, m = mode 0-5, vv = fan 0-4).
+RAW_ATTRIBUTES = {
+    "raw_power": "power",
+    "raw_mode": "mode_raw",
+    "raw_fan": "fan_mode",
+}
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the MySair thermostats."""
@@ -170,8 +178,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
 
     @property
     def extra_state_attributes(self):
-        # Capabilities reported by MySair for the zone (field in brackets in
-        # the translated attribute names); empty until the first status.
+        # Capabilities and raw codes reported by MySair for the zone (field in
+        # brackets in the translated attribute names); empty until the first
+        # status.
         return dict(self._capabilities)
 
     # ------------------------------------------------------------------
@@ -345,6 +354,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         self._capabilities = {
             attr: bool(zone.get(field)) for attr, field in CAPABILITY_ATTRIBUTES.items()
         }
+        self._capabilities.update(
+            {attr: zone.get(field) for attr, field in RAW_ATTRIBUTES.items()}
+        )
 
         # Fan speed (vv/fanspeed, see docs/protocol-findings.md §9).
         self._attr_fan_modes = list(_FAN_MODES) if zone.get("allow_fan") else []

@@ -86,6 +86,15 @@
           },
           "has_programs": {
             "name": "Programs possible (hp)"
+          },
+          "raw_power": {
+            "name": "On/off (e)"
+          },
+          "raw_mode": {
+            "name": "Mode (m)"
+          },
+          "raw_fan": {
+            "name": "Fan (vv)"
           }
         }
       }

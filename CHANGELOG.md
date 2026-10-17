@@ -12,7 +12,7 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - **„Betriebsart festhalten“** (Einstellungs-Entität am Installationsgerät, ab Werk aus): Für Anlagen, deren Wärmepumpe nicht von MySair umgeschaltet wird. Ist sie an, beschreibt „Betriebsart“ die Richtung der Wärmepumpe: jederzeit umstellbar ohne etwas zu senden, über einen Neustart erhalten; Home Assistant schaltet Zonen nur noch in dieser Richtung ein.
 - **„Betriebsart weicht ab“** (Binärsensor): meldet ein Problem, wenn bei festgehaltener Betriebsart Zonen in der anderen Richtung laufen, z. B. am Thermostat oder in der App eingeschaltet.
 - **Luftfeuchte im Thermostat:** `climate.<zone>` liefert zusätzlich die aktuelle Luftfeuchte (`current_humidity`, derselbe Wert wie `sensor.<zone>_luftfeuchtigkeit`). Damit zeigen der Thermostat-Dialog und Kacheln Temperatur und Luftfeuchte zusammen an.
-- **Fähigkeiten je Zone** als Attribute des Thermostats, mit dem MySair-Feld im Namen: „Heizen möglich (c)“, „Kühlen möglich (f)“, „Fußboden vorhanden (s)“, „Lüfter einstellbar (v)“, „Timer möglich (tz)“, „Programme möglich (hp)“. Zusätzlich im Diagnose-Download (`zone_capabilities`).
+- **Fähigkeiten je Zone** als Attribute des Thermostats, mit dem MySair-Feld im Namen: „Heizen möglich (c)“, „Kühlen möglich (f)“, „Fußboden vorhanden (s)“, „Lüfter einstellbar (v)“, „Timer möglich (tz)“, „Programme möglich (hp)“. Dazu die Rohwerte „Ein/Aus (e)“, „Modus (m)“ und „Lüfter (vv)“ zum Vergleich mit App und Handbüchern. Die Fähigkeiten stehen zusätzlich im Diagnose-Download (`zone_capabilities`).
 
 ### Changed
 - Lüfterstufe: Die Anzeige „Zonal (Standard)“ heißt jetzt „Standard“ (englisch „Default“, spanisch „Por defecto“). Der Zustandswert `zonal` für Automationen bleibt unverändert.

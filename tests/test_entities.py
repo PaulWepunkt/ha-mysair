@@ -496,6 +496,9 @@ async def test_climate_capability_attributes(hass, monkeypatch):
             allow_fan=False,
             allow_timer=True,
             allow_programs=False,
+            power="2",
+            mode_raw="4",
+            fan_mode="0",
         ),
     )
     await hass.async_block_till_done()
@@ -507,6 +510,10 @@ async def test_climate_capability_attributes(hass, monkeypatch):
     assert attrs["has_fan"] is False
     assert attrs["has_timer"] is True
     assert attrs["has_programs"] is False
+    # Raw MySair codes, unchanged.
+    assert attrs["raw_power"] == "2"
+    assert attrs["raw_mode"] == "4"
+    assert attrs["raw_fan"] == "0"
 
 
 async def test_climate_min_max_temp_from_status(hass, monkeypatch):
