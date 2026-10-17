@@ -28,11 +28,17 @@ Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezei
 | Modus | `sensor.<zone>_modus` | Aktueller Modus (`off`/`heat`/`cool`/`on`, angezeigt als Aus/Heizen/Kühlen/Ein). Das Attribut `medium` (`air`/`floor`/`air_and_floor`, angezeigt als Luft/Fußboden/Luft und Fußboden) gibt an, welches Medium aktiv ist; es bleibt auch bei ausgeschalteter Zone erhalten |
 | Luftfeuchtigkeit | `sensor.<zone>_luftfeuchtigkeit` | Relative Luftfeuchte; „unbekannt“, wenn das Thermostat keinen Feuchtesensor hat |
 
-## Weitere Entitäten
+## Geräte und weitere Entitäten
 
-| Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
-|---|---|---|
-| Cloud-Verbindung | `sensor.mysair_cloud_verbindung` | Eine je eingerichtetem Konto, als Diagnose-Entität: Zustand der MQTT-Verbindung (Verbunden/Getrennt), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Nachrichtenauswertung (zur Fehlersuche) |
+Die Geräte bilden einen Baum: **Konto** (MySair) → **Installation** (die MySair-Steuerung, mit ihrer Software-Version) → **Zonen**. In Home Assistant ist das auf der Geräteseite unter „Verbunden über“ zu sehen.
+
+| Entität | Gerät | Entity-ID (deutsche Oberfläche) | Beschreibung |
+|---|---|---|---|
+| Cloud-Verbindung | Konto | `sensor.mysair_cloud_verbindung` | Diagnose-Entität: Zustand der MQTT-Verbindung (Verbunden/Getrennt), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Nachrichtenauswertung (zur Fehlersuche) |
+| Betriebsart | Installation | `sensor.<anlage>_betriebsart` | Heizen oder Kühlen – die Richtung der ganzen Anlage, auch wenn alle Zonen aus sind |
+| In Betrieb | Installation | `binary_sensor.<anlage>_in_betrieb` | An, solange mindestens eine Zone läuft |
+| Hauptzone | Installation | `sensor.<anlage>_hauptzone` | Diagnose-Entität: Name der Hauptzone (an sie geht „Anlage stoppen“) |
+| Heiz-/Kühlkonflikt | Installation | `binary_sensor.<anlage>_heiz_kuhlkonflikt` | Diagnose-Entität: „Problem“, wenn laufende Zonen unterschiedliche Richtungen melden. Die Integration und die App verhindern das; der Sensor erkennt es, falls es auf anderem Weg doch entsteht |
 
 Bestehende Installationen behalten ihre bisherigen Entity-IDs. Wer die neuen, sprachabhängigen IDs möchte, entfernt die Integration und richtet sie neu ein; Dashboards und Automationen müssen danach angepasst werden.
 

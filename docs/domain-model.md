@@ -148,10 +148,11 @@ Werte und Ableitungen sind in `status_parser.parse_status_payload` zusammengefas
 | Modus `auto` | 🟢 Vom Protokoll nicht unterstützt | `m` (0–5) deckt genau die sechs Kombinationen Luft/Fußboden × Heizen/Kühlen ab. Die einzige echte Automatik ist die Lüfterstufe (`vv="4"`). |
 | Timer / Programme | 🟡 Geplant | Befehle bestätigt (`temporizer` mit 30/60/90/120 Minuten oder `"0"`; `programs`, `update-program`, `delete-program`). Das Programmobjekt muss noch mit echtem Datenverkehr bestätigt werden. Siehe `known-unknowns.md` #27. |
 | Richtung der Anlage | ✅ wie in der App | Eine Richtung je Installation (Parität von `m` der ersten laufenden Zone, sonst der ersten Zone); Wechsel nur, wenn alle Zonen aus sind. Siehe `protocol-findings.md` §4b. |
-| Hauptzone | ✅ ausgewertet | `pl`=`"1"`; Ziel des Befehls `stop`. |
+| Hauptzone | ✅ ausgewertet | `pl`=`"1"`; Ziel des Befehls `stop`; Sensor „Hauptzone“ am Installationsgerät. |
+| Richtungskonflikt | ✅ überwacht | Laufende Zonen mit unterschiedlicher Parität von `m`; Binärsensor „Heiz-/Kühlkonflikt“. |
 | Online/offline je Zone | **Unbekannt** | In der App gibt es `isOutService` (Feld nicht bestätigt). |
 | Gerätefehler | **Unbekannt** | Nicht abgebildet. |
-| Controller als eigenes Gerät | Nicht abgebildet | Jede Zone ist ein eigenständiges Gerät ohne `via_device`. |
+| Controller als eigenes Gerät | ✅ abgebildet | Gerätebaum Konto (Cloud-Verbindung) → Installation (Software-Version aus `v`) → Zonen, verknüpft über `via_device_id`. |
 
 ---
 

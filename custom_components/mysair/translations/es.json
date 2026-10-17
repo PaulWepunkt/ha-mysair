@@ -41,6 +41,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "installation_active": {
+        "name": "En funcionamiento"
+      },
+      "direction_conflict": {
+        "name": "Conflicto calor/frío"
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "name": "Conexión con la nube",
@@ -70,6 +78,16 @@
             }
           }
         }
+      },
+      "operating_mode": {
+        "name": "Modo de funcionamiento",
+        "state": {
+          "heat": "Calor",
+          "cool": "Frío"
+        }
+      },
+      "main_zone": {
+        "name": "Zona principal"
       }
     },
     "switch": {

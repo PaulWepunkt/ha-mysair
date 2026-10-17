@@ -135,7 +135,7 @@ devices: t.t.map(e=>({
 | `sv` | **Fußbodenheizung ein/aus**: "0"/"1" (zu unterscheiden von der Fähigkeit `s`) | str |
 | `pl` | Hauptzone | Flag |
 | Fähigkeiten | `c`=Heizen möglich, `f`=Kühlen möglich, `v`=Lüfter, `s`=Fußboden, `tz`=Timer, `hp`=Programme | "1"/"0" |
-| `v` (Installation) | Version | – |
+| `v` (Installation) | Version der Steuerung | als Software-Version des Installationsgeräts angezeigt |
 
 **Hinweis zur Luftfeuchte:** Echte Zonendaten können neben `hm` auch ein Feld `hum` enthalten. `hum` meldet dabei `"0"`, `hm` trägt den Messwert. Die Integration liest deshalb `hm` zuerst und `hum` nur als Ersatz; ein Wert von 0 gilt als unbekannt. Siehe `docs/known-unknowns.md` #25.
 

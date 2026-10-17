@@ -22,10 +22,12 @@ import logging
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import DOMAIN
-from .status_parser import installation_is_heat
+from .device import find_device, installation_identifier
+from .status_parser import has_direction_conflict, installation_is_heat
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class InstallationState:
     is_heat: bool | None  # direction (True heat, False cool, None unknown)
     is_on: bool  # at least one zone is on
     main_zone_id: str | None  # zone with pl="1"
+    has_conflict: bool  # running zones report different directions
 
 
 class MySairCoordinator:
@@ -70,12 +73,16 @@ class MySairCoordinator:
     subscription per config entry; see the module docstring.
     """
 
-    def __init__(self, hass: HomeAssistant, installation_refs: list) -> None:
+    def __init__(
+        self, hass: HomeAssistant, installation_refs: list, entry_id: str = ""
+    ) -> None:
         self.hass = hass
+        self._entry_id = entry_id
         self._installation_refs = set(installation_refs)
         # ctl -> {zone_id: last zone dict}; insertion order = order in which
         # the controller first reported the zones (relevant for the direction).
         self._zones = {}
+        self._firmware = {}  # ctl -> last reported controller firmware
         self._unsub = None
 
     def start(self) -> None:
@@ -101,6 +108,8 @@ class MySairCoordinator:
         if ctl not in self._installation_refs:
             return
 
+        self._update_firmware(ctl, data.get("firmware"))
+
         zones = self._zones.setdefault(ctl, {})
         updated = []
         for zone in data.get("zones", []):
@@ -120,6 +129,19 @@ class MySairCoordinator:
         if updated:
             async_dispatcher_send(self.hass, signal_installation_update(ctl))
 
+    def _update_firmware(self, ctl: str, firmware) -> None:
+        """Show the controller firmware as software version of the installation device."""
+        if not firmware or self._firmware.get(ctl) == firmware:
+            return
+        self._firmware[ctl] = firmware
+        device = find_device(self.hass, self._entry_id, installation_identifier(ctl))
+        if device is not None and device.sw_version != firmware:
+            dr.async_get(self.hass).async_update_device(device.id, sw_version=firmware)
+
+    @property
+    def entry_id(self) -> str:
+        return self._entry_id
+
     def zone(self, ctl: str, zone_id: str) -> dict | None:
         """Last known state of a zone, or None before its first status."""
         return self._zones.get(ctl, {}).get(zone_id)
@@ -132,4 +154,5 @@ class MySairCoordinator:
             is_heat=installation_is_heat(zones),
             is_on=any(z.get("is_on") for z in zones),
             main_zone_id=main_zone_id,
+            has_conflict=has_direction_conflict(zones),
         )

@@ -9,8 +9,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .availability import AvailabilityMixin
 from .const import DOMAIN, SCAN_INTERVAL as _SCAN_INTERVAL_SECONDS
-from .device import account_device_info, zone_device_info
+from .device import account_device_info, find_device, zone_device_info, zone_identifier
 from .coordinator import signal_zone_update
+from .installation_entity import MySairInstallationEntity, installation_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(MySairSetpointSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairModeSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairHumiditySensor(hass, inst_ref, dev_id, name))
+
+    entities += installation_entities(
+        hass, entry, (MySairOperatingModeSensor, MySairMainZoneSensor)
+    )
 
     async_add_entities(entities)
     _LOGGER.info(f"[MySair Sensor] {len(entities)} sensors created.")
@@ -320,3 +325,56 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
             self._state = new_val
             _LOGGER.debug(f"[MySair Sensor] {self._zone_name} humidity: {new_val}%")
         self.async_write_ha_state()
+
+
+# ==========================================================
+# INSTALLATION SENSORS (on the installation device)
+# ==========================================================
+class MySairOperatingModeSensor(MySairInstallationEntity, SensorEntity):
+    """Heat/cool direction of the whole installation, also while all zones are off.
+
+    Same rule as the official app: direction of the first zone that is on,
+    otherwise of the first zone (docs/protocol-findings.md §4b).
+    """
+
+    _attr_translation_key = "operating_mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["heat", "cool"]
+
+    def __init__(self, coordinator, inst_ref, name):
+        super().__init__(coordinator, inst_ref, name, "operating_mode")
+
+    @property
+    def native_value(self):
+        is_heat = self.installation.is_heat
+        if is_heat is None:
+            return None
+        return "heat" if is_heat else "cool"
+
+
+class MySairMainZoneSensor(MySairInstallationEntity, SensorEntity):
+    """Main zone of the installation (pl="1"), shown by its device name.
+
+    The official app sends "stop" to this zone. The device name is used so
+    that a zone renamed in Home Assistant appears under its new name.
+    """
+
+    _attr_translation_key = "main_zone"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, inst_ref, name):
+        super().__init__(coordinator, inst_ref, name, "main_zone")
+
+    @property
+    def native_value(self):
+        zone_id = self.installation.main_zone_id
+        if zone_id is None:
+            return None
+        device = find_device(
+            self.hass,
+            self.coordinator.entry_id,
+            zone_identifier(self.inst_ref, zone_id),
+        )
+        if device is None:
+            return zone_id
+        return device.name_by_user or device.name or zone_id
