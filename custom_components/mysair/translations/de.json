@@ -132,6 +132,9 @@
     },
     "stop_failed": {
       "message": "Die Anlage konnte nicht gestoppt werden. Bitte die Verbindung zu MySair prüfen und es erneut versuchen."
+    },
+    "command_failed": {
+      "message": "Der Befehl konnte nicht an MySair gesendet werden. Bitte die Verbindung prüfen und es erneut versuchen."
     }
   }
 }

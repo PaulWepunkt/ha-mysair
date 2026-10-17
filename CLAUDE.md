@@ -250,10 +250,10 @@ Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.m
 - **Entity-IDs:** Mit `has_entity_name` bildet HA die IDs aus Gerät (= Zonenname) und Entitätsname in der eingestellten Sprache. Bestehende Installationen behalten ihre IDs, solange die `unique_id` gleich bleibt (dafür gibt es einen Test). `unique_id`s nie ändern.
 - **Erfolg von `/send/instruction`** = HTTP 201 + leere Liste `error`. Den Text in `msg` nie vergleichen: Er hängt von der Kontosprache ab (`"Creado"`, `"Created"` …).
 - **Richtung der Anlage wie in der App** (`protocol-findings.md` §4b, `zone_control.py`): Läuft eine Zone, sind nur „Aus“ und die aktuelle Richtung erlaubt. Einschalten = Luft an, Fußboden wie bisher, Richtung der Anlage, aktuelle Soll-Temperatur. Fußboden beim Kühlen nur mit der Option `allow_floor_cooling`. `stop` geht an die Hauptzone (`pl`).
+- **Fehler beim Senden** von Befehlen werden als übersetzte `HomeAssistantError` (`command_failed`, `zone_control.command_error`) angezeigt; der optimistische Zustand wird dabei nicht gesetzt bzw. zurückgenommen.
 - **Verwaiste Zonen** werden bei jedem Setup/Reload entfernt (`_cleanup_stale_zone_devices`); das Kontogerät (Kennung `entry_id`) bleibt unangetastet.
 
 Offen:
-- 🟡 **Fehler beim Senden von Befehlen** erscheinen nur im Log, nicht in der Oberfläche (abgelehnte Bedienungen wie ein gesperrter Richtungswechsel werden bereits übersetzt angezeigt).
 - 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
 - 🟡 **Uninterpretierte Zonenfelder** `vf`, `hmh`, `mh`, `p`, `ps` (`docs/known-unknowns.md`).
 - 🟡 **Timer und Programme** (F6, `known-unknowns.md` #27): Befehle bekannt; das Programmobjekt vor der Umsetzung mit echtem Datenverkehr bestätigen.

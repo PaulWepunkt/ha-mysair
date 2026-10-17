@@ -136,7 +136,7 @@ Werte und Ableitungen sind in `status_parser.parse_status_payload` zusammengefas
 | Begriff | Feld | Stand in der Integration |
 |---|---|---|
 | Fußbodenheizung vs. Luft | `m` ({2,3,4,5}=Fußboden) + Fähigkeit `s` + `sv` (ein/aus) | ✅ Schalter „Fußbodenheizung“ (`MySairFloorSwitch`); nutzt den Befehl `mode` und berechnet `m` neu (`compute_mode_value`). Zusammenfassung des aktiven Mediums im Attribut `medium` des Modus-Sensors. |
-| Lüfterstufe | `vv` + Fähigkeit `v` + Befehl `fanspeed` | ✅ `climate.fan_mode` |
+| Lüfterstufe | `vv` + Fähigkeit `v` + Befehl `fanspeed` | ✅ `climate.fan_mode` (`off`/`1`–`3`/`auto`) |
 | Luftfeuchte | `hm` (Ersatz `hum`; 0 = unbekannt), siehe `known-unknowns.md` #25 | ✅ Feuchtesensor je Zone |
 | Standby | `e=="2"` | ✅ als `HVACAction.IDLE` |
 | Verfügbarkeit | Aktualität des letzten Status | ✅ „nicht verfügbar“ bis zum ersten Status und nach 360 s ohne Status (`availability.py`) |

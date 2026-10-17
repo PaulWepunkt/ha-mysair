@@ -8,7 +8,7 @@ from .command_feedback import CommandFeedbackMixin
 from .const import DOMAIN
 from .device import zone_device_info
 from .coordinator import signal_zone_update
-from .zone_control import floor_command, turn_on_mode
+from .zone_control import command_error, floor_command, turn_on_mode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +103,7 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error(f"[MySair Switch] Failed to turn on {self.name}: {e}")
+            raise command_error(e) from e
 
     async def async_turn_off(self, **kwargs):
         previous_is_on = self._is_on
@@ -120,6 +121,7 @@ class MySairSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error(f"[MySair Switch] Failed to turn off {self.name}: {e}")
+            raise command_error(e) from e
 
     async def async_added_to_hass(self):
         self._unsub = async_dispatcher_connect(
@@ -230,6 +232,7 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error(f"[MySair Switch] Failed to change floor of {self.name}: {e}")
+            raise command_error(e) from e
 
     async def async_added_to_hass(self):
         self._unsub = async_dispatcher_connect(

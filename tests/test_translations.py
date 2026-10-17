@@ -50,6 +50,7 @@ def test_every_control_error_is_translated():
     source = (BASE / "zone_control.py").read_text(encoding="utf-8")
     source += (BASE / "climate.py").read_text(encoding="utf-8")
     used = set(re.findall(r'control_error\("([a-z_]+)"\)', source))
+    used |= set(re.findall(r'translation_key="([a-z_]+)"', source))
     assert used
     exceptions = _load(BASE / "strings.json")["exceptions"]
     assert used <= set(exceptions)

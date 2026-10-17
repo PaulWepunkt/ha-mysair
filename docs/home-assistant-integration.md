@@ -64,7 +64,7 @@ Gemeinsam für climate/sensor/switch (Bestätigt):
 - ✅ Gemeinsame `device_info` (`device.py`); eine Zone = ein Gerät.
 - ✅ `_attr_should_poll = False` und `available` nach Aktualität der MQTT-Daten (`availability.py`).
 - ✅ `@callback` für Handler; Abonnements werden in `async_will_remove_from_hass` gelöst.
-- 🟡 **Fehler bei Befehlen werden nur geloggt.** Scheitert ein HTTP-Befehl, sieht der Nutzer keine Fehlermeldung in der Oberfläche; der optimistische Zustand wird später zurückgesetzt. Besser wäre ein `HomeAssistantError` mit übersetzter Meldung (Exception Translations).
+- ✅ **Fehler bei Befehlen werden angezeigt.** Scheitert ein HTTP-Befehl, erscheint eine übersetzte Meldung (`HomeAssistantError`, Schlüssel `command_failed`); der angezeigte Zustand bleibt beim bisherigen Wert.
 
 ### climate.py
 - ✅ `supported_features`: `TARGET_TEMPERATURE | FAN_MODE | TURN_ON | TURN_OFF`.
@@ -148,5 +148,4 @@ Der Pin in `requirements-test-ha.txt` muss mit der produktiv genutzten HA-Versio
 
 ## 12. Mögliche nächste Schritte
 
-1. 🟡 Fehler bei Befehlen als übersetzte `HomeAssistantError` an die Oberfläche geben.
-2. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.
+1. 🟢 Tests für doppelte und vertauschte MQTT-Nachrichten.

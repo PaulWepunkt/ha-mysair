@@ -132,6 +132,9 @@
     },
     "stop_failed": {
       "message": "The installation could not be stopped. Check the connection to MySair and try again."
+    },
+    "command_failed": {
+      "message": "The command could not be sent to MySair. Check the connection and try again."
     }
   }
 }

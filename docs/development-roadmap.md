@@ -99,7 +99,7 @@
 ## Offen (ohne Phasennummer)
 
 - ✅ **Schutz vor widersprüchlicher Heiz-/Kühlrichtung** wie in der App (`protocol-findings.md` §4b, `zone_control.py`).
-- **Fehler bei Befehlen sichtbar machen** (`HomeAssistantError` mit übersetzter Meldung) – 🟡.
+- ✅ **Fehler bei Befehlen sichtbar machen** (`HomeAssistantError` mit übersetzter Meldung `command_failed`).
 - **Tests für doppelte/vertauschte MQTT-Nachrichten** und für `account_mismatch` im Reauth – 🟢.
 - **Uninterpretierte Zonenfelder** `vf`/`hmh`/`mh`/`p`/`ps` – nur mit neuen Belegen (`known-unknowns.md` §6).
 - **Paketdecoder (E1/E2) mit echtem Datenverkehr bestätigen** – bisher nur mit synthetischen Bytes getestet.
