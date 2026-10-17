@@ -319,6 +319,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
             self._attr_min_temp = zone.get("temp_min")
         if zone.get("temp_max") is not None:
             self._attr_max_temp = zone.get("temp_max")
+        # Same value as the humidity sensor; None while the thermostat
+        # reports no reading (see status_parser.parse_humidity).
+        self._attr_current_humidity = zone.get("humidity")
 
         self._update_hvac_modes(zone)
 

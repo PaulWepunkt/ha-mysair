@@ -466,6 +466,20 @@ async def test_humidity_sensor_updates_from_mqtt_event(hass, monkeypatch):
     assert hass.states.get("sensor.salon_humidity").state == "52.0"
 
 
+async def test_climate_current_humidity_from_status(hass, monkeypatch):
+    await _setup_entry(hass, monkeypatch)
+
+    _fire_status(hass, "INST_A", _zone(humidity=52.0))
+    await hass.async_block_till_done()
+    assert hass.states.get("climate.salon").attributes["current_humidity"] == 52.0
+
+    # No reading (thermostat reports 0, parsed as None): the attribute is
+    # dropped instead of keeping a stale value.
+    _fire_status(hass, "INST_A", _zone(humidity=None))
+    await hass.async_block_till_done()
+    assert "current_humidity" not in hass.states.get("climate.salon").attributes
+
+
 async def test_climate_min_max_temp_from_status(hass, monkeypatch):
     await _setup_entry(hass, monkeypatch)
     # Before the first status: default values (10-30).

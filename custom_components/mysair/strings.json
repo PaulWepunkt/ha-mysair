@@ -62,7 +62,7 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "zonal": "Zonal (default)",
+              "zonal": "Default",
               "1": "Low",
               "2": "Medium",
               "3": "High",
