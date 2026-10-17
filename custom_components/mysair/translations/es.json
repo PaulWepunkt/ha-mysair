@@ -83,7 +83,7 @@
       "heating_medium": {
         "name": "Calentar con",
         "state": {
-          "app": "Como la app MySair",
+          "app": "Por defecto",
           "air": "Solo aire",
           "floor": "Solo suelo",
           "air_and_floor": "Aire y suelo"
@@ -92,7 +92,7 @@
       "cooling_medium": {
         "name": "Enfriar con",
         "state": {
-          "app": "Como la app MySair",
+          "app": "Por defecto",
           "air": "Solo aire",
           "floor": "Solo suelo",
           "air_and_floor": "Aire y suelo"

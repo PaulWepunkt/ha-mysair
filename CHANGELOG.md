@@ -15,6 +15,7 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ### Changed
 - Lüfterstufe: Die Anzeige „Zonal (Standard)“ heißt jetzt „Standard“ (englisch „Default“, spanisch „Por defecto“). Der Zustandswert `zonal` für Automationen bleibt unverändert.
+- „Heizen mit“/„Kühlen mit“: Die Wahl „Wie die MySair-App“ heißt jetzt „Standard“ (englisch „Default“, spanisch „Por defecto“). Sie verhält sich wie bisher (Klimaanlage an, Fußboden wie zuletzt); der Zustandswert `app` bleibt unverändert.
 
 ## [3.2.0] - 2026-10-17
 
