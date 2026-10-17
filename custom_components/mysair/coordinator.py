@@ -72,7 +72,7 @@ class InstallationState:
     # Direction the installation actually runs in (rule of the app), None
     # if unknown.
     running_is_heat: bool | None = None
-    # Held direction ("Betriebsart festhalten"), None if hold is off.
+    # Held direction ("MySair schaltet Wärmepumpe" off), None otherwise.
     held_is_heat: bool | None = None
 
     @property
@@ -107,7 +107,8 @@ class MySairCoordinator:
         # Only held locally, like in the app; it is sent with the next zone
         # that is turned on and dropped as soon as a zone is on.
         self._chosen_is_heat = {}
-        # ctl -> True if the direction is held ("Betriebsart festhalten"):
+        # ctl -> True if the direction is held ("MySair schaltet Wärmepumpe"
+        # off):
         # for installations whose heat pump is not switched by MySair, the
         # user sets the direction to match the heat pump and HA keeps it.
         self._hold = {}

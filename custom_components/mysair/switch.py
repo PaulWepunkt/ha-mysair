@@ -3,7 +3,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import RestoredExtraData, RestoreEntity
 
 from .availability import AvailabilityMixin
 from .command_feedback import CommandFeedbackMixin
@@ -43,7 +43,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     )
                 )
 
-    entities += installation_entities(hass, entry, (MySairHoldDirectionSwitch,))
+    entities += installation_entities(hass, entry, (MySairHeatPumpSwitch,))
 
     async_add_entities(entities)
     _LOGGER.info(f"[MySair Switch] {len(entities)} switches created.")
@@ -268,28 +268,43 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         self.async_write_ha_state()
 
 
-class MySairHoldDirectionSwitch(MySairInstallationEntity, RestoreEntity, SwitchEntity):
-    """Configuration: hold the heat/cool direction ("Betriebsart festhalten").
+class MySairHeatPumpSwitch(MySairInstallationEntity, RestoreEntity, SwitchEntity):
+    """Configuration: "MySair schaltet Wärmepumpe" (MySair switches the heat pump).
 
-    For installations whose heat pump is not switched by MySair (it has to
-    be set to heating or cooling at its own controller). When on, the
-    "Betriebsart" select describes the heat pump: Home Assistant only turns
-    zones on in that direction and reports a problem when the installation
-    runs in the other one. Off by default: the behaviour of the app.
-    Nothing is sent to MySair; the setting is kept over a restart.
+    On by default: MySair switches the heat pump between heating and cooling,
+    the behaviour of the app. Off for installations whose heat pump has to
+    be set to heating or cooling at its own controller: the "Betriebsart"
+    select then describes the heat pump (held direction), Home Assistant
+    only turns zones on in that direction and reports a problem when the
+    installation runs in the other one. Nothing is sent to MySair; the
+    setting is kept over a restart.
+
+    The unique_id keeps the key "hold_direction" of version 3.3.0, where the
+    switch had the inverted meaning ("Betriebsart festhalten", on = hold).
     """
 
-    _attr_translation_key = "hold_direction"
+    _attr_translation_key = "mysair_switches_heat_pump"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator, inst_ref, name):
         super().__init__(coordinator, inst_ref, name, "hold_direction")
 
     async def async_added_to_hass(self):
-        last = await self.async_get_last_state()
-        if last is not None and last.state == "on":
+        extra = await self.async_get_last_extra_data()
+        data = extra.as_dict() if extra is not None else {}
+        if _RESTORE_KEY in data:
+            held = not data[_RESTORE_KEY]
+        else:
+            # Saved by version 3.3.0 without extra data: "on" meant "hold".
+            last = await self.async_get_last_state()
+            held = last is not None and last.state == "on"
+        if held:
             self.coordinator.set_hold(self.inst_ref, True)
         await super().async_added_to_hass()
+
+    @property
+    def extra_restore_state_data(self):
+        return RestoredExtraData({_RESTORE_KEY: self.is_on})
 
     @property
     def available(self):
@@ -297,12 +312,15 @@ class MySairHoldDirectionSwitch(MySairInstallationEntity, RestoreEntity, SwitchE
 
     @property
     def is_on(self):
-        return self.coordinator.is_held(self.inst_ref)
+        return not self.coordinator.is_held(self.inst_ref)
 
     async def async_turn_on(self, **kwargs):
-        self.coordinator.set_hold(self.inst_ref, True)
+        self.coordinator.set_hold(self.inst_ref, False)
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
-        self.coordinator.set_hold(self.inst_ref, False)
+        self.coordinator.set_hold(self.inst_ref, True)
         self.async_write_ha_state()
+
+
+_RESTORE_KEY = "mysair_switches_heat_pump"
