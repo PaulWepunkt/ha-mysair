@@ -68,6 +68,24 @@
               "3": "Hoch",
               "auto": "Automatik"
             }
+          },
+          "can_heat": {
+            "name": "Heizen möglich (c)"
+          },
+          "can_cool": {
+            "name": "Kühlen möglich (f)"
+          },
+          "has_floor": {
+            "name": "Fußboden vorhanden (s)"
+          },
+          "has_fan": {
+            "name": "Lüfter einstellbar (v)"
+          },
+          "has_timer": {
+            "name": "Timer möglich (tz)"
+          },
+          "has_programs": {
+            "name": "Programme möglich (hp)"
           }
         }
       }

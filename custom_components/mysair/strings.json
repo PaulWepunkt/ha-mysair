@@ -68,6 +68,24 @@
               "3": "High",
               "auto": "Auto"
             }
+          },
+          "can_heat": {
+            "name": "Heating possible (c)"
+          },
+          "can_cool": {
+            "name": "Cooling possible (f)"
+          },
+          "has_floor": {
+            "name": "Floor available (s)"
+          },
+          "has_fan": {
+            "name": "Fan adjustable (v)"
+          },
+          "has_timer": {
+            "name": "Timer possible (tz)"
+          },
+          "has_programs": {
+            "name": "Programs possible (hp)"
           }
         }
       }

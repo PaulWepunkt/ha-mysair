@@ -39,6 +39,17 @@ _FAN_MODE_WIRE_TO_HA = {
 _FAN_MODE_HA_TO_WIRE = {v: k for k, v in _FAN_MODE_WIRE_TO_HA.items()}
 _FAN_MODES = [FAN_MODE_ZONAL, "1", "2", "3", FAN_MODE_AUTO]
 
+# Zone capabilities shown as attributes: attribute -> parsed zone field.
+# The MySair field codes are part of the translated names (c, f, s, v, tz, hp).
+CAPABILITY_ATTRIBUTES = {
+    "can_heat": "allow_heat",
+    "can_cool": "allow_cool",
+    "has_floor": "allow_floor",
+    "has_fan": "allow_fan",
+    "has_timer": "allow_timer",
+    "has_programs": "allow_programs",
+}
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the MySair thermostats."""
@@ -104,6 +115,7 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         self._attr_max_temp = 30
         self._fan_mode = None
         self._attr_fan_modes = []
+        self._capabilities = {}
         self._unsub = None
         self._unsub_installation = None
         self._init_command_feedback()
@@ -155,6 +167,12 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
     @property
     def fan_mode(self):
         return self._fan_mode
+
+    @property
+    def extra_state_attributes(self):
+        # Capabilities reported by MySair for the zone (field in brackets in
+        # the translated attribute names); empty until the first status.
+        return dict(self._capabilities)
 
     # ------------------------------------------------------------------
     # CONTROL METHODS (using send_zone_command)
@@ -324,6 +342,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         self._attr_current_humidity = zone.get("humidity")
 
         self._update_hvac_modes(zone)
+        self._capabilities = {
+            attr: bool(zone.get(field)) for attr, field in CAPABILITY_ATTRIBUTES.items()
+        }
 
         # Fan speed (vv/fanspeed, see docs/protocol-findings.md §9).
         self._attr_fan_modes = list(_FAN_MODES) if zone.get("allow_fan") else []

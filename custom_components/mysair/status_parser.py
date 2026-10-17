@@ -234,7 +234,7 @@ def parse_status_payload(payload):
       - humidity: ``hm`` first, ``hum`` as fallback, 0 = unknown
         (see ``parse_humidity``)
       - capabilities: ``c``=heat allowed, ``f``=cool allowed, ``v``=fan,
-        ``s``=floor heating
+        ``s``=floor heating, ``tz``=timer, ``hp``=programs
 
     Each zone in ``zones`` contains: ``ctl``, ``zone_id``, ``zone_name``,
     ``temp_actual``, ``temp_target``, ``temp_min``, ``temp_max``, ``humidity``,
@@ -304,6 +304,10 @@ def parse_status_payload(payload):
                 "allow_cool": _to_str(t.get("f")) == "1",
                 "allow_fan": _to_str(t.get("v")) == "1",
                 "allow_floor": _to_str(t.get("s")) == "1",
+                # Only shown as information: timer and programs are not
+                # implemented (Home Assistant automations cover them).
+                "allow_timer": _to_str(t.get("tz")) == "1",
+                "allow_programs": _to_str(t.get("hp")) == "1",
                 # Main zone of the installation (pl="1"): the official app
                 # sends the "stop" command with this zone as the device.
                 "is_main": _to_str(t.get("pl")) == "1",
