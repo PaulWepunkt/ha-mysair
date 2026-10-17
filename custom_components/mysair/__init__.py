@@ -297,6 +297,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     coordinator.start()
     hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 
+    # Options (allowed media) take effect without a reload: entities read
+    # them when a command is sent; this only refreshes what they display.
+    async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry):
+        coordinator.async_options_updated()
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
     # --- PLATFORMS ---
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

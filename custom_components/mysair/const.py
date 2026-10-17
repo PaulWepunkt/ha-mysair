@@ -27,3 +27,21 @@ ATTR_INSTALLATION_REF = "installation_ref"
 # Off by default: floor cooling needs dew-point protection that MySair does
 # not report, so it has to be enabled consciously.
 CONF_ALLOW_FLOOR_COOLING = "allow_floor_cooling"
+
+# Options flow: which media may be used for heating and cooling. Defaults
+# keep the behaviour of the official app (air may always be used).
+CONF_ALLOW_AIR_HEATING = "allow_air_heating"
+CONF_ALLOW_FLOOR_HEATING = "allow_floor_heating"
+CONF_ALLOW_AIR_COOLING = "allow_air_cooling"
+
+# Option key -> default, per direction (True = heat): (air, floor).
+MEDIA_PERMISSION_KEYS = {
+    True: (CONF_ALLOW_AIR_HEATING, CONF_ALLOW_FLOOR_HEATING),
+    False: (CONF_ALLOW_AIR_COOLING, CONF_ALLOW_FLOOR_COOLING),
+}
+MEDIA_PERMISSION_DEFAULTS = {
+    CONF_ALLOW_AIR_HEATING: True,
+    CONF_ALLOW_FLOOR_HEATING: True,
+    CONF_ALLOW_AIR_COOLING: True,
+    CONF_ALLOW_FLOOR_COOLING: False,
+}

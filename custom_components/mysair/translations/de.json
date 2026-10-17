@@ -61,6 +61,24 @@
           "heat": "Heizen",
           "cool": "Kühlen"
         }
+      },
+      "heating_medium": {
+        "name": "Heizen mit",
+        "state": {
+          "app": "Wie die MySair-App",
+          "air": "Nur Luft",
+          "floor": "Nur Fußboden",
+          "air_and_floor": "Luft und Fußboden"
+        }
+      },
+      "cooling_medium": {
+        "name": "Kühlen mit",
+        "state": {
+          "app": "Wie die MySair-App",
+          "air": "Nur Luft",
+          "floor": "Nur Fußboden",
+          "air_and_floor": "Luft und Fußboden"
+        }
       }
     },
     "sensor": {
@@ -110,14 +128,24 @@
     "step": {
       "init": {
         "title": "MySair-Optionen",
-        "description": "Einstellungen zum Verhalten der Integration.",
+        "description": "Welche Medien Home Assistant zum Heizen und zum Kühlen verwenden darf. Jede Zone wählt zusätzlich ihr Medium mit den Einstellungen „Heizen mit“ und „Kühlen mit“.",
         "data": {
+          "allow_air_heating": "Heizen mit Luft erlauben",
+          "allow_floor_heating": "Fußbodenheizung erlauben",
+          "allow_air_cooling": "Kühlen mit Luft erlauben",
           "allow_floor_cooling": "Fußbodenkühlung erlauben"
         },
         "data_description": {
+          "allow_air_heating": "Die Luftgeräte dürfen zum Heizen verwendet werden. Nur ausschalten, wenn die Anlage nicht mit Luft heizen soll.",
+          "allow_floor_heating": "Der Fußboden darf zum Heizen verwendet werden.",
+          "allow_air_cooling": "Die Luftgeräte dürfen zum Kühlen verwendet werden.",
           "allow_floor_cooling": "Nur einschalten, wenn die Anlage für Fußbodenkühlung ausgelegt und gegen Kondenswasser (Taupunkt) geschützt ist. Ausgeschaltet nutzt Home Assistant den Fußboden nicht, solange die Anlage kühlt."
         }
       }
+    },
+    "error": {
+      "no_medium_heat": "Mindestens ein Medium zum Heizen erlauben.",
+      "no_medium_cool": "Mindestens ein Medium zum Kühlen erlauben."
     }
   },
   "exceptions": {
@@ -135,6 +163,8 @@
     },
     "command_failed": {
       "message": "Der Befehl konnte nicht an MySair gesendet werden. Bitte die Verbindung prüfen und es erneut versuchen."
-    }
+    },
+    "no_medium_allowed": "Für diese Zone ist in dieser Richtung kein Medium erlaubt. Bitte die Optionen der MySair-Integration prüfen.",
+    "floor_heating_disabled": "Fußbodenheizung ist in den Optionen der MySair-Integration ausgeschaltet."
   }
 }

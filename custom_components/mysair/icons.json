@@ -26,6 +26,22 @@
           "heat": "mdi:fire",
           "cool": "mdi:snowflake"
         }
+      },
+      "heating_medium": {
+        "default": "mdi:radiator",
+        "state": {
+          "air": "mdi:fan",
+          "floor": "mdi:heat-wave",
+          "air_and_floor": "mdi:home-thermometer"
+        }
+      },
+      "cooling_medium": {
+        "default": "mdi:snowflake-thermometer",
+        "state": {
+          "air": "mdi:fan",
+          "floor": "mdi:heat-wave",
+          "air_and_floor": "mdi:home-thermometer"
+        }
       }
     },
     "sensor": {

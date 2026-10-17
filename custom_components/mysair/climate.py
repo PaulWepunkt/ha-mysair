@@ -204,7 +204,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
 
         is_heat = hvac_mode == HVACMode.HEAT
         zone = self.coordinator.zone(self.inst_ref, self.device_id) or {}
-        if is_heat not in allowed_directions(self.coordinator, self.inst_ref, zone):
+        if is_heat not in allowed_directions(
+            self.coordinator, self._entry, self.inst_ref, zone
+        ):
             raise control_error("direction_locked")
         mode_value = turn_on_mode(
             self.coordinator, self._entry, self.inst_ref, self.device_id, is_heat
@@ -352,7 +354,9 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
 
     def _update_hvac_modes(self, zone):
         """OFF plus heat/cool by capability (c/f) and installation direction."""
-        directions = allowed_directions(self.coordinator, self.inst_ref, zone)
+        directions = allowed_directions(
+            self.coordinator, self._entry, self.inst_ref, zone
+        )
         modes = [HVACMode.OFF]
         if True in directions:
             modes.append(HVACMode.HEAT)

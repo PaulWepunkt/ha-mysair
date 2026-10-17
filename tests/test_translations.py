@@ -58,5 +58,19 @@ def test_every_control_error_is_translated():
 
 def test_options_flow_is_translated():
     options = _load(BASE / "strings.json")["options"]["step"]["init"]
-    assert "allow_floor_cooling" in options["data"]
-    assert "allow_floor_cooling" in options["data_description"]
+    keys = {
+        "allow_air_heating",
+        "allow_floor_heating",
+        "allow_air_cooling",
+        "allow_floor_cooling",
+    }
+    assert set(options["data"]) == keys
+    assert set(options["data_description"]) == keys
+    errors = _load(BASE / "strings.json")["options"]["error"]
+    assert set(errors) == {"no_medium_heat", "no_medium_cool"}
+
+
+def test_medium_select_states_cover_all_media():
+    selects = _load(BASE / "strings.json")["entity"]["select"]
+    for key in ("heating_medium", "cooling_medium"):
+        assert set(selects[key]["state"]) == {"app", "air", "floor", "air_and_floor"}

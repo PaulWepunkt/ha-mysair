@@ -61,6 +61,24 @@
           "heat": "Heat",
           "cool": "Cool"
         }
+      },
+      "heating_medium": {
+        "name": "Heat with",
+        "state": {
+          "app": "Like the MySair app",
+          "air": "Air only",
+          "floor": "Floor only",
+          "air_and_floor": "Air and floor"
+        }
+      },
+      "cooling_medium": {
+        "name": "Cool with",
+        "state": {
+          "app": "Like the MySair app",
+          "air": "Air only",
+          "floor": "Floor only",
+          "air_and_floor": "Air and floor"
+        }
       }
     },
     "sensor": {
@@ -110,14 +128,24 @@
     "step": {
       "init": {
         "title": "MySair options",
-        "description": "Behaviour settings of the integration.",
+        "description": "Which media Home Assistant may use for heating and for cooling. Each zone additionally chooses its medium with the settings “Heat with” and “Cool with”.",
         "data": {
+          "allow_air_heating": "Allow heating with air",
+          "allow_floor_heating": "Allow floor heating",
+          "allow_air_cooling": "Allow cooling with air",
           "allow_floor_cooling": "Allow floor cooling"
         },
         "data_description": {
+          "allow_air_heating": "Air units may be used for heating. Only disable if the installation is not meant to heat with air.",
+          "allow_floor_heating": "The floor may be used for heating.",
+          "allow_air_cooling": "Air units may be used for cooling.",
           "allow_floor_cooling": "Only enable this if the installation is designed for floor cooling and protected against condensation (dew point). When disabled, Home Assistant does not use the floor while the installation is cooling."
         }
       }
+    },
+    "error": {
+      "no_medium_heat": "Allow at least one medium for heating.",
+      "no_medium_cool": "Allow at least one medium for cooling."
     }
   },
   "exceptions": {
@@ -135,6 +163,8 @@
     },
     "command_failed": {
       "message": "The command could not be sent to MySair. Check the connection and try again."
-    }
+    },
+    "no_medium_allowed": "No medium is allowed for this zone in this direction. Check the MySair integration options.",
+    "floor_heating_disabled": "Floor heating is disabled in the MySair integration options."
   }
 }

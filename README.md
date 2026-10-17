@@ -21,7 +21,8 @@ Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezei
 | Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
 | Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, Lüfter (Aus, Stufe 1–3 oder Automatik, sofern die Zone das unterstützt). Scheitert ein Befehl, erscheint eine Fehlermeldung, und die Anzeige bleibt beim bisherigen Wert |
-| Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus. Einschalten wie in der MySair-App: Klimaanlage an, Fußboden wie zuletzt, Richtung der Anlage, aktuelle Soll-Temperatur |
+| Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus. Eingeschaltet wird in der Richtung der Anlage mit der aktuellen Soll-Temperatur und dem Medium aus „Heizen mit“/„Kühlen mit“ |
+| Heizen mit / Kühlen mit | `select.<zone>_heizen_mit`, `select.<zone>_kuhlen_mit` | Einstellungs-Entitäten: womit die Zone beim Einschalten über Home Assistant heizt bzw. kühlt – „Wie die MySair-App“ (Klimaanlage an, Fußboden wie zuletzt), „Nur Luft“, „Nur Fußboden“ oder „Luft und Fußboden“. Angeboten wird nur, was die Optionen erlauben und die Zone kann. Beim Umstellen wird nichts gesendet; die Wahl bleibt über einen Neustart erhalten |
 | Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußboden ein/aus, kombinierbar mit der Klimaanlage derselben Zone; „an“ nur, solange die Zone läuft. Bleibt weder Klimaanlage noch Fußboden an, wird die Zone ausgeschaltet. In Zonen ohne Fußboden „nicht verfügbar“ |
 | Temperatur | `sensor.<zone>_temperatur` | Aktuelle Raumtemperatur |
 | Soll-Temperatur | `sensor.<zone>_soll_temperatur` | Eingestellte Zieltemperatur |
@@ -68,7 +69,16 @@ Einstellungen → Geräte & Dienste → Integration hinzufügen → **MySair** �
 
 Einstellungen → Geräte & Dienste → MySair → **Konfigurieren**:
 
-- **Fußbodenkühlung erlauben** (Standard: aus). Ausgeschaltet nutzt Home Assistant den Fußboden nicht, solange die Anlage kühlt: Beim Einschalten wird nur die Klimaanlage gestartet, und der Schalter „Fußbodenheizung“ meldet einen Fehler. Nur einschalten, wenn die Anlage für Fußbodenkühlung ausgelegt und gegen Kondenswasser (Taupunkt) geschützt ist. Die Einstellung wirkt sofort, ohne Neuladen.
+Hier wird festgelegt, welche Medien Home Assistant zum Heizen und zum Kühlen überhaupt verwenden darf. Jede Zone wählt innerhalb dieser Grenzen mit „Heizen mit“ und „Kühlen mit“ ihr Medium. Die Einstellungen wirken sofort, ohne Neuladen.
+
+| Option | Standard | Bedeutung |
+|---|---|---|
+| Heizen mit Luft erlauben | an | Die Luftgeräte dürfen heizen. Ausschalten, wenn die Anlage nur über den Fußboden heizen soll |
+| Fußbodenheizung erlauben | an | Der Fußboden darf heizen |
+| Kühlen mit Luft erlauben | an | Die Luftgeräte dürfen kühlen |
+| Fußbodenkühlung erlauben | aus | Nur einschalten, wenn die Anlage für Fußbodenkühlung ausgelegt und gegen Kondenswasser (Taupunkt) geschützt ist |
+
+Je Richtung muss mindestens ein Medium erlaubt sein. Ist ein Medium nicht erlaubt, verwendet Home Assistant es beim Einschalten nicht, und der Schalter „Fußbodenheizung“ meldet einen Fehler. Eine Zone, die in einer Richtung kein erlaubtes Medium hat (z. B. ohne Fußboden, wenn Heizen mit Luft nicht erlaubt ist), bietet diese Richtung nicht an. Die Optionen gelten nur für Bedienung über Home Assistant, nicht für Wandthermostate oder die MySair-App, und sie ändern nichts an Zonen, die bereits laufen.
 
 ## Heizen und Kühlen
 
