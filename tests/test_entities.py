@@ -14,7 +14,7 @@ pytest.importorskip("homeassistant")
 
 import homeassistant.util.dt as dt_util
 from homeassistant.components.climate.const import HVACMode, HVACAction
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import async_update_entity
@@ -987,7 +987,10 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert names["switch.salon_fussbodenheizung"] == "Salon Fußbodenheizung"
     assert names["sensor.mysair_cloud_verbindung"] == "MySair Cloud-Verbindung"
     # Installation device ("MySair INST_A" without a name in the account).
-    assert names["sensor.mysair_inst_a_betriebsart"] == "MySair INST_A Betriebsart"
+    assert names["select.mysair_inst_a_betriebsart"] == "MySair INST_A Betriebsart"
+    assert (
+        names["button.mysair_inst_a_anlage_stoppen"] == "MySair INST_A Anlage stoppen"
+    )
     assert names["sensor.mysair_inst_a_hauptzone"] == "MySair INST_A Hauptzone"
     assert names["binary_sensor.mysair_inst_a_in_betrieb"] == "MySair INST_A In Betrieb"
     assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
@@ -1309,7 +1312,7 @@ async def test_installation_device_uses_installation_name(hass, monkeypatch):
 
 async def test_installation_entities_unavailable_until_first_status(hass, monkeypatch):
     await _setup_two_zones(hass, monkeypatch, [])
-    state = _installation_state(hass, "mysair_operating_mode_INST_A")
+    state = _installation_state(hass, "mysair_operating_mode_INST_A", "select")
     assert state.state == "unavailable"
 
 
@@ -1319,7 +1322,10 @@ async def test_operating_mode_and_running_follow_zones(hass, monkeypatch):
     await hass.async_block_till_done()
 
     # All off: the direction is still shown (from the first zone).
-    assert _installation_state(hass, "mysair_operating_mode_INST_A").state == "cool"
+    assert (
+        _installation_state(hass, "mysair_operating_mode_INST_A", "select").state
+        == "cool"
+    )
     running = _installation_state(
         hass, "mysair_installation_active_INST_A", "binary_sensor"
     )
@@ -1327,7 +1333,10 @@ async def test_operating_mode_and_running_follow_zones(hass, monkeypatch):
 
     _fire_zones(hass, _mode_zone("DEV_2", "0", True))
     await hass.async_block_till_done()
-    assert _installation_state(hass, "mysair_operating_mode_INST_A").state == "heat"
+    assert (
+        _installation_state(hass, "mysair_operating_mode_INST_A", "select").state
+        == "heat"
+    )
     running = _installation_state(
         hass, "mysair_installation_active_INST_A", "binary_sensor"
     )
@@ -1368,3 +1377,114 @@ async def test_main_zone_sensor_shows_device_name(hass, monkeypatch):
     _fire_zones(hass, _mode_zone("DEV_2", "0", False, is_main=True))
     await hass.async_block_till_done()
     assert _installation_state(hass, "mysair_main_zone_INST_A").state == "Kitchen"
+
+
+# --- Season change (select) and stop button (block C, items 11-12) ---
+
+
+def _entity_id(hass, domain, unique_id):
+    return er.async_get(hass).async_get_entity_id(domain, DOMAIN, unique_id)
+
+
+async def test_select_changes_direction_only_while_all_off(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "1", False), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+    assert hass.states.get(select).state == "cool"
+
+    # All off: like the app, the choice is only kept locally ...
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": select, "option": "heat"},
+        blocking=True,
+    )
+    assert calls == []
+    assert hass.states.get(select).state == "heat"
+
+    # ... and the next zone that is turned on starts in that direction.
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+    )
+    assert calls[-1]["value"] == "0"
+
+
+async def test_select_locked_while_a_zone_is_on(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "1", True), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": select, "option": "heat"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "direction_locked"
+    assert hass.states.get(select).state == "cool"
+
+
+async def test_chosen_direction_dropped_when_a_zone_turns_on(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "1", False), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": select, "option": "heat"},
+        blocking=True,
+    )
+
+    # Another client turns a zone on in cool: the real direction wins.
+    _fire_zones(hass, _mode_zone("DEV_2", "1", True))
+    await hass.async_block_till_done()
+    _fire_zones(hass, _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+    assert hass.states.get(select).state == "cool"
+
+
+async def test_stop_button_sends_stop_to_main_zone(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    calls = []
+    monkeypatch.setattr(
+        MySairAPI,
+        "send_installation_command",
+        lambda self, ctl, command_type, value=None, device="": calls.append(
+            (ctl, command_type, device)
+        ),
+    )
+    button = _entity_id(hass, "button", "mysair_stop_installation_INST_A")
+    # Available even before the first status (command goes over HTTP).
+    assert hass.states.get(button).state != "unavailable"
+
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", True, is_main=True),
+        _mode_zone("DEV_2", "0", True),
+    )
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button}, blocking=True
+    )
+    assert [c for c in calls if c[1] == "stop"] == [("INST_A", "stop", "DEV_1")]
+
+
+async def test_stop_button_failure_shows_translated_error(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+
+    def _fail(self, ctl, command_type, value=None, device=""):
+        raise ConnectionError("boom")
+
+    monkeypatch.setattr(MySairAPI, "send_installation_command", _fail)
+    button = _entity_id(hass, "button", "mysair_stop_installation_INST_A")
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": button}, blocking=True
+        )
+    assert err.value.translation_key == "stop_failed"

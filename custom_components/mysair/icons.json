@@ -14,6 +14,20 @@
         }
       }
     },
+    "button": {
+      "stop_installation": {
+        "default": "mdi:stop-circle-outline"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "default": "mdi:sun-snowflake-variant",
+        "state": {
+          "heat": "mdi:fire",
+          "cool": "mdi:snowflake"
+        }
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "default": "mdi:cloud-check",
@@ -28,13 +42,6 @@
         "default": "mdi:hvac",
         "state": {
           "off": "mdi:hvac-off",
-          "heat": "mdi:fire",
-          "cool": "mdi:snowflake"
-        }
-      },
-      "operating_mode": {
-        "default": "mdi:sun-snowflake-variant",
-        "state": {
           "heat": "mdi:fire",
           "cool": "mdi:snowflake"
         }

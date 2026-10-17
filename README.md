@@ -35,7 +35,8 @@ Die Geräte bilden einen Baum: **Konto** (MySair) → **Installation** (die MySa
 | Entität | Gerät | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|---|
 | Cloud-Verbindung | Konto | `sensor.mysair_cloud_verbindung` | Diagnose-Entität: Zustand der MQTT-Verbindung (Verbunden/Getrennt), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Nachrichtenauswertung (zur Fehlersuche) |
-| Betriebsart | Installation | `sensor.<anlage>_betriebsart` | Heizen oder Kühlen – die Richtung der ganzen Anlage, auch wenn alle Zonen aus sind |
+| Betriebsart | Installation | `select.<anlage>_betriebsart` | Heizen oder Kühlen – die Richtung der ganzen Anlage, auch wenn alle Zonen aus sind. Umstellbar nur, solange alle Zonen aus sind; wie in der App wird dabei noch nichts gesendet, die nächste eingeschaltete Zone startet in der gewählten Richtung |
+| Anlage stoppen | Installation | `button.<anlage>_anlage_stoppen` | Schaltet alle Zonen der Anlage mit einem Befehl aus (wie der Dienst `mysair.stop_installation`) |
 | In Betrieb | Installation | `binary_sensor.<anlage>_in_betrieb` | An, solange mindestens eine Zone läuft |
 | Hauptzone | Installation | `sensor.<anlage>_hauptzone` | Diagnose-Entität: Name der Hauptzone (an sie geht „Anlage stoppen“) |
 | Heiz-/Kühlkonflikt | Installation | `binary_sensor.<anlage>_heiz_kuhlkonflikt` | Diagnose-Entität: „Problem“, wenn laufende Zonen unterschiedliche Richtungen melden. Die Integration und die App verhindern das; der Sensor erkennt es, falls es auf anderem Weg doch entsteht |
@@ -75,7 +76,9 @@ Eine MySair-Anlage hat **eine** Richtung (Heizen oder Kühlen) für alle Zonen. 
 
 - **Läuft mindestens eine Zone**, bieten alle Thermostate nur „Aus“ und die aktuelle Richtung an.
 - **Sind alle Zonen aus**, kann eine Zone in beiden Richtungen eingeschaltet werden; damit wechselt die Richtung der ganzen Anlage.
-- Um die Richtung zu wechseln, also zuerst alle Zonen ausschalten (z. B. mit dem Dienst „Anlage stoppen“) und dann eine Zone in der neuen Richtung einschalten.
+- Um die Richtung zu wechseln, also zuerst alle Zonen ausschalten (z. B. mit dem Knopf „Anlage stoppen“), dann die „Betriebsart“ umstellen oder direkt eine Zone in der neuen Richtung einschalten.
+- Änderungen an den Thermostaten in den Räumen oder in der MySair-App übernimmt die Integration aus den Statusmeldungen der Steuerung; wer die Änderung gemacht hat, spielt keine Rolle. Kommt eine Meldung nicht sofort, fragt die Integration den Zustand spätestens alle 2 Minuten ab.
+- Eine umgestellte „Betriebsart“ wirkt nur, wenn die nächste Zone über Home Assistant eingeschaltet wird. Wird sie stattdessen am Thermostat oder in der App eingeschaltet, gilt die Richtung, mit der die Anlage dann tatsächlich startet; die Auswahl zeigt danach diese Richtung.
 - Der Dienst **„Anlage stoppen“** (`mysair.stop_installation`) wird wie in der App an die Hauptzone der Anlage gesendet.
 
 ## Bekannte Einschränkungen

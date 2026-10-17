@@ -49,6 +49,20 @@
         "name": "Heat/cool conflict"
       }
     },
+    "button": {
+      "stop_installation": {
+        "name": "Stop installation"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Operating mode",
+        "state": {
+          "heat": "Heat",
+          "cool": "Cool"
+        }
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "name": "Cloud connection",
@@ -77,13 +91,6 @@
               "air_and_floor": "Air and floor"
             }
           }
-        }
-      },
-      "operating_mode": {
-        "name": "Operating mode",
-        "state": {
-          "heat": "Heat",
-          "cool": "Cool"
         }
       },
       "main_zone": {
@@ -122,6 +129,9 @@
     },
     "floor_cooling_disabled": {
       "message": "Floor cooling is disabled in the MySair integration options."
+    },
+    "stop_failed": {
+      "message": "The installation could not be stopped. Check the connection to MySair and try again."
     }
   }
 }

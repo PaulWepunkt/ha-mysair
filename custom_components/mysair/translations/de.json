@@ -49,6 +49,20 @@
         "name": "Heiz-/Kühlkonflikt"
       }
     },
+    "button": {
+      "stop_installation": {
+        "name": "Anlage stoppen"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Betriebsart",
+        "state": {
+          "heat": "Heizen",
+          "cool": "Kühlen"
+        }
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "name": "Cloud-Verbindung",
@@ -77,13 +91,6 @@
               "air_and_floor": "Luft und Fußboden"
             }
           }
-        }
-      },
-      "operating_mode": {
-        "name": "Betriebsart",
-        "state": {
-          "heat": "Heizen",
-          "cool": "Kühlen"
         }
       },
       "main_zone": {
@@ -122,6 +129,9 @@
     },
     "floor_cooling_disabled": {
       "message": "Fußbodenkühlung ist in den Optionen der MySair-Integration ausgeschaltet."
+    },
+    "stop_failed": {
+      "message": "Die Anlage konnte nicht gestoppt werden. Bitte die Verbindung zu MySair prüfen und es erneut versuchen."
     }
   }
 }

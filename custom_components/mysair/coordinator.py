@@ -48,10 +48,12 @@ def signal_zone_update(inst_ref: str, device_id: str) -> str:
 
 
 def signal_installation_update(inst_ref: str) -> str:
-    """Dispatcher signal sent after all zones of a status message were stored.
+    """Dispatcher signal sent when the state of an installation changed.
 
-    Entities whose allowed actions depend on the other zones (heat/cool
-    direction of the installation) listen to it.
+    Sent after all zones of a status message were stored (argument
+    ``from_status=True``) and after a local change such as a chosen direction
+    (``from_status=False``). Entities whose allowed actions depend on the
+    other zones (heat/cool direction of the installation) listen to it.
     """
     return f"{_SIGNAL_ZONE_UPDATE}_{inst_ref}"
 
@@ -83,6 +85,10 @@ class MySairCoordinator:
         # the controller first reported the zones (relevant for the direction).
         self._zones = {}
         self._firmware = {}  # ctl -> last reported controller firmware
+        # ctl -> direction chosen while all zones are off (app: season change).
+        # Only held locally, like in the app; it is sent with the next zone
+        # that is turned on and dropped as soon as a zone is on.
+        self._chosen_is_heat = {}
         self._unsub = None
 
     def start(self) -> None:
@@ -118,6 +124,8 @@ class MySairCoordinator:
                 continue
             zones[zone_id] = zone
             updated.append((zone_id, zone))
+        if any(z.get("is_on") for z in zones.values()):
+            self._chosen_is_heat.pop(ctl, None)
 
         # All zones are stored before dispatching, so every entity sees the
         # complete installation state when it handles its own zone.
@@ -127,7 +135,19 @@ class MySairCoordinator:
             )
             async_dispatcher_send(self.hass, signal_zone_update(ctl, zone_id), zone)
         if updated:
-            async_dispatcher_send(self.hass, signal_installation_update(ctl))
+            async_dispatcher_send(self.hass, signal_installation_update(ctl), True)
+
+    def choose_direction(self, ctl: str, is_heat: bool) -> bool:
+        """Choose the heat/cool direction while all zones are off.
+
+        Returns False if a zone is on (the direction is then locked). Nothing
+        is sent: like the app, the next zone that is turned on uses it.
+        """
+        if self.installation_state(ctl).is_on:
+            return False
+        self._chosen_is_heat[ctl] = is_heat
+        async_dispatcher_send(self.hass, signal_installation_update(ctl), False)
+        return True
 
     def _update_firmware(self, ctl: str, firmware) -> None:
         """Show the controller firmware as software version of the installation device."""
@@ -150,9 +170,13 @@ class MySairCoordinator:
         """Direction, on state and main zone of an installation."""
         zones = list(self._zones.get(ctl, {}).values())
         main_zone_id = next((z.get("zone_id") for z in zones if z.get("is_main")), None)
+        is_on = any(z.get("is_on") for z in zones)
+        is_heat = installation_is_heat(zones)
+        if not is_on and ctl in self._chosen_is_heat:
+            is_heat = self._chosen_is_heat[ctl]
         return InstallationState(
-            is_heat=installation_is_heat(zones),
-            is_on=any(z.get("is_on") for z in zones),
+            is_heat=is_heat,
+            is_on=is_on,
             main_zone_id=main_zone_id,
             has_conflict=has_direction_conflict(zones),
         )

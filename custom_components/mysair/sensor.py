@@ -37,9 +37,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(MySairModeSensor(hass, inst_ref, dev_id, name))
             entities.append(MySairHumiditySensor(hass, inst_ref, dev_id, name))
 
-    entities += installation_entities(
-        hass, entry, (MySairOperatingModeSensor, MySairMainZoneSensor)
-    )
+    entities += installation_entities(hass, entry, (MySairMainZoneSensor,))
 
     async_add_entities(entities)
     _LOGGER.info(f"[MySair Sensor] {len(entities)} sensors created.")
@@ -330,28 +328,6 @@ class MySairHumiditySensor(AvailabilityMixin, SensorEntity):
 # ==========================================================
 # INSTALLATION SENSORS (on the installation device)
 # ==========================================================
-class MySairOperatingModeSensor(MySairInstallationEntity, SensorEntity):
-    """Heat/cool direction of the whole installation, also while all zones are off.
-
-    Same rule as the official app: direction of the first zone that is on,
-    otherwise of the first zone (docs/protocol-findings.md §4b).
-    """
-
-    _attr_translation_key = "operating_mode"
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["heat", "cool"]
-
-    def __init__(self, coordinator, inst_ref, name):
-        super().__init__(coordinator, inst_ref, name, "operating_mode")
-
-    @property
-    def native_value(self):
-        is_heat = self.installation.is_heat
-        if is_heat is None:
-            return None
-        return "heat" if is_heat else "cool"
-
-
 class MySairMainZoneSensor(MySairInstallationEntity, SensorEntity):
     """Main zone of the installation (pl="1"), shown by its device name.
 
