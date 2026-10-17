@@ -74,3 +74,9 @@ def test_medium_select_states_cover_all_media():
     selects = _load(BASE / "strings.json")["entity"]["select"]
     for key in ("heating_medium", "cooling_medium"):
         assert set(selects[key]["state"]) == {"app", "air", "floor", "air_and_floor"}
+
+
+def test_fan_modes_are_translated():
+    climate = _load(BASE / "strings.json")["entity"]["climate"]["thermostat"]
+    states = climate["state_attributes"]["fan_mode"]["state"]
+    assert set(states) == {"zonal", "1", "2", "3", "auto"}

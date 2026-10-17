@@ -711,7 +711,7 @@ async def test_climate_fan_mode_updates_from_mqtt_event(hass, monkeypatch):
 
     state = hass.states.get("climate.salon")
     assert state.attributes["fan_mode"] == "2"
-    assert set(state.attributes["fan_modes"]) == {"off", "1", "2", "3", "auto"}
+    assert set(state.attributes["fan_modes"]) == {"zonal", "1", "2", "3", "auto"}
 
 
 async def test_climate_fan_mode_auto_mapping(hass, monkeypatch):
@@ -733,19 +733,20 @@ async def test_climate_fan_mode_none_when_not_allowed(hass, monkeypatch):
     assert state.attributes["fan_modes"] == []
 
 
-async def test_climate_fan_mode_off_when_wire_is_zero(hass, monkeypatch):
-    # "0" = no fan mode active (the app's fan icon toggles between "0" and "4").
+async def test_climate_fan_mode_zonal_when_wire_is_zero(hass, monkeypatch):
+    # "0" = zonal speed, the default chosen by the control module (thermostat
+    # manual); the app's fan icon toggles between "0" and "4".
     await _setup_entry(hass, monkeypatch)
 
     _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="0"))
     await hass.async_block_till_done()
 
     state = hass.states.get("climate.salon")
-    assert state.attributes["fan_mode"] == "off"
-    assert state.attributes["fan_modes"] == ["off", "1", "2", "3", "auto"]
+    assert state.attributes["fan_mode"] == "zonal"
+    assert state.attributes["fan_modes"] == ["zonal", "1", "2", "3", "auto"]
 
 
-async def test_climate_set_fan_mode_off_sends_zero(hass, monkeypatch):
+async def test_climate_set_fan_mode_zonal_sends_zero(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="4"))
@@ -754,7 +755,7 @@ async def test_climate_set_fan_mode_off_sends_zero(hass, monkeypatch):
     await hass.services.async_call(
         "climate",
         "set_fan_mode",
-        {"entity_id": "climate.salon", "fan_mode": "off"},
+        {"entity_id": "climate.salon", "fan_mode": "zonal"},
         blocking=True,
     )
     assert calls[-1]["command_type"] == "fanspeed"

@@ -13,7 +13,11 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 - **„Heizen mit“ und „Kühlen mit“ je Zone** (Einstellungs-Entitäten): „Wie die MySair-App“ (Standard, Klimaanlage an und Fußboden wie zuletzt), „Nur Luft“, „Nur Fußboden“ oder „Luft und Fußboden“. Gilt für jedes Einschalten über Home Assistant und bleibt über einen Neustart erhalten.
 
 ### Changed
+- Dokumentation: Erkenntnisse aus den Handbüchern der Thermostate ARTE/VESTA (`docs/protocol-findings.md` §10). Die Anlage schützt die Heiz-/Kühlrichtung auch selbst; ein Raum mit Fußbodenheizung kann am Thermostat automatisch auf Fußbodenkühlung wechseln, was sich nur in der Anlage verhindern lässt.
 - Zonen ohne erlaubtes Medium für eine Richtung bieten diese Richtung im Thermostat nicht mehr an. Eine Zone wechselt nie auf Kühlen, nur weil Heizen mit ihrem Medium nicht erlaubt ist.
+
+### Fixed
+- **Lüfter „Zonal“ statt „Aus“:** Der Wert `vv` = `"0"` ist laut Handbuch der Thermostate die zonale Geschwindigkeit, also der Standard, bei dem die Anlage die Stufe selbst wählt – kein ausgeschalteter Lüfter. Er heißt jetzt „Zonal (Standard)“. Die Lüfterstufen werden übersetzt angezeigt (Niedrig/Mittel/Hoch/Automatik).
 
 ## [3.1.0] - 2026-10-17
 

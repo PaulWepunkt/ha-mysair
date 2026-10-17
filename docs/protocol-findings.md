@@ -107,7 +107,7 @@ Die App speichert keine Richtung je Zone. Jede Zone zeigt die Richtung der **Ins
 - **Fußboden umschalten** (`toggleRadiatingFloor`): `setModeHeat(isModeAC(), floor)`. Die Luft behält ihren Zustand (zählt nur bei eingeschalteter Zone). Bleibt weder Luft noch Fußboden an, sendet die App `power "0"`.
 - **Anlage stoppen** (`stop()`): `device` ist die Referenz der Hauptzone (`pl` = `"1"`), nicht leer.
 
-Der Schutz liegt also in der App, nicht im Backend. Die Integration übernimmt dieselben Regeln (`zone_control.py`); die Auswahl „Betriebsart“ entspricht dem Saisonwechsel der App und merkt die Richtung bei ausgeschalteter Anlage ebenfalls nur lokal (nicht über einen Neustart von Home Assistant hinweg). Wird die nächste Zone an einem Raumthermostat oder in der App eingeschaltet, gilt die Richtung aus dem nächsten Status. **Offen (ungeprüft):** ob Raumthermostate selbst Heizen/Kühlen umstellen können und wie schnell die Steuerung eine Änderung am Thermostat per MQTT meldet. Zusätzlich legen die Optionen fest, welche Medien je Richtung verwendet werden dürfen (Fußbodenkühlung standardmäßig aus, weil MySair keinen Taupunktschutz meldet), und jede Zone wählt mit „Heizen mit“/„Kühlen mit“, womit sie beim Einschalten startet. Die Einstellung „Wie die MySair-App“ entspricht dem Verhalten der App.
+Die App schützt die Richtung also auf der Client-Seite. Laut Handbuch der Thermostate schützt sich auch die Anlage selbst (§10): Ein Richtungswechsel bei laufender Anlage wird abgelehnt. Die Integration übernimmt dieselben Regeln (`zone_control.py`); die Auswahl „Betriebsart“ entspricht dem Saisonwechsel der App und merkt die Richtung bei ausgeschalteter Anlage ebenfalls nur lokal (nicht über einen Neustart von Home Assistant hinweg). Wird die nächste Zone an einem Raumthermostat oder in der App eingeschaltet, gilt die Richtung aus dem nächsten Status. **Offen (ungeprüft):** ob Raumthermostate selbst Heizen/Kühlen umstellen können und wie schnell die Steuerung eine Änderung am Thermostat per MQTT meldet. Zusätzlich legen die Optionen fest, welche Medien je Richtung verwendet werden dürfen (Fußbodenkühlung standardmäßig aus, weil die Integration nicht erkennen kann, ob die Anlage dafür ausgelegt und ihr Feuchteschutz eingerichtet ist), und jede Zone wählt mit „Heizen mit“/„Kühlen mit“, womit sie beim Einschalten startet. Die Einstellung „Wie die MySair-App“ entspricht dem Verhalten der App.
 
 ## 5. Felder der Zonen-Nutzdaten (Abbildung in `_validateInstallation`)
 
@@ -258,12 +258,39 @@ updateFanMode:function(e){
 
 | `vv` | Bedeutung |
 |---|---|
-| `"0"` | Kein Lüftermodus (`hasFanMode()` → `false`); das Lüftersymbol der App ist dann aus und schaltet beim Antippen auf `"4"` |
+| `"0"` | Keine eigene Stufe gewählt (`hasFanMode()` → `false`), laut Handbuch der Thermostate die **zonale Geschwindigkeit**: der Standard ab Werk, bei dem das Steuermodul die Stufe aus den offenen Zonen berechnet (§10). Das Lüftersymbol der App schaltet zwischen `"0"` und `"4"` |
 | `"1"` / `"2"` / `"3"` | Manuelle Stufe 1 / 2 / 3 |
-| `"4"` | Automatik (in der App als „A“ angezeigt) |
+| `"4"` | Automatik des Thermostats („A“): Stufe nach Abstand zwischen Raum- und Soll-Temperatur; laut Handbuch nur bei einer einzigen Zone oder unabhängigen Fancoils sinnvoll |
 
 **⚠️ Falle bei der Analyse:** Eine Demo-/Storybook-Seite der UI-Komponenten im selben Bundle definiert `ventilationGroups:[{key:"",values:["A"]},{key:"manual",values:["1","2","3"]}]` mit Beispieldaten, die **nur zur Darstellung des Bauteils erfunden** sind und mit keinem echten `vv` verbunden sind. Ein erster flüchtiger Blick auf diese Seite führte zu einem falschen Zwischenstand. Die eigentliche Bestätigung kam aus der echten Installationskomponente (oben), die `fanGroups` über `getFanMode()`/`hasFanMode()` direkt mit `this.vv` verbindet. Lehre: In Bundles mit Demo-Seiten immer prüfen, ob der zitierte Code zum echten Datenfluss gehört (hier: das Objekt `status`/`te` aus §4) und nicht zu einer isolierten Demo mit Füllwerten.
 
 - **Befehl:** `command:"fanspeed"`, `value:""+i` (String des gewünschten `vv`: `"0"`, `"1"`, `"2"`, `"3"` oder `"4"`).
 - **Fähigkeit:** Das Bedienelement erscheint nur bei `allowFan()` (`"1"==this.v`) – in `status_parser.py` als `allow_fan` ausgewertet.
-- **Umsetzung:** `climate.py` stellt `fan_mode`/`fan_modes` bereit (HA `ClimateEntityFeature.FAN_MODE`): `"0"` ↔ `"off"`, `"1"/"2"/"3"` unverändert, `"4"` ↔ `"auto"`; `async_set_fan_mode` sendet `fanspeed` über `api.send_zone_command`. **Offen (ungeprüft):** was „kein Lüftermodus“ an der Anlage physisch bewirkt.
+- **Umsetzung:** `climate.py` stellt `fan_mode`/`fan_modes` bereit (HA `ClimateEntityFeature.FAN_MODE`): `"0"` ↔ `"zonal"`, `"1"/"2"/"3"` unverändert, `"4"` ↔ `"auto"` (angezeigt als „Zonal (Standard)“, „Niedrig“, „Mittel“, „Hoch“, „Automatik“); `async_set_fan_mode` sendet `fanspeed` über `api.send_zone_command`.
+
+---
+
+## 10. Erkenntnisse aus den Handbüchern der Thermostate ARTE/VESTA
+
+Quelle: Benutzer- und Installateur-Handbuch der Raumthermostate ARTE und ARTE-VESTA (Kabelversion MS28/30, öffentlich vom Hersteller). Gewissheitsstufe: **Herstellerangabe**. Wie diese Funktionen im Protokoll erscheinen, ist nur dort belegt, wo es ausdrücklich angegeben ist.
+
+**Richtung (Heizen/Kühlen) in der Anlage selbst**
+- Ein Wechsel zwischen Kühlen, Heizen, Entfeuchten und reinem Lüften wirkt auf die ganze Anlage. Läuft die Anlage, lehnt sie einen neuen Modus ab und bleibt beim aktuellen. Zum Wechseln müssen alle Thermostate aus sein; dann ein Thermostat im neuen Modus einschalten.
+- Wird ein Thermostat in der anderen Richtung eingeschaltet, während die Anlage schon läuft, übernimmt es automatisch die laufende Richtung: Warmluft wird zu Kühlluft, **Fußbodenheizung wird zu Fußbodenkühlung** („suelo refrescante“).
+- Thermostat-Modus **„Maestro“**: Nur dieses Thermostat darf zwischen Heizen und Kühlen wechseln, auch bei laufender Anlage. **„Maestro 2“** gibt zusätzlich die Temperatur vor. Mit einem Maestro steht außerdem ein Modus „Auto Frío/Calor“ zur Verfügung. **Offen:** ob das Feld `pl` („Hauptzone“) der Maestro-Einstellung entspricht.
+
+**Medien am Thermostat**
+- Eigene Modi für Warmluft, Kühlluft, Fußbodenheizung und Fußbodenkühlung. Der Installateur legt im Menü „Tipo de Termostato“ fest, welche angeboten werden („Frío“, „Calor“, „Suelo F“ = Fußboden im Kühlbetrieb, „Suelo C“ = Fußboden im Heizbetrieb).
+- **„Calor Comb.“** erlaubt Warmluft und Fußbodenheizung gleichzeitig; ohne diese Einstellung wird nicht kombiniert.
+- Unter „Límites“ gibt es eine **maximale Luftfeuchte**: Wird sie bei Fußbodenkühlung erreicht, schaltet die Anlage den Fußboden ab und die Luft zum Entfeuchten ein, bis die Feuchte 5 % unter dem Grenzwert liegt.
+
+**Lüfter**
+- Stufen: „Zonal“ (Standard, Stufe vom Steuermodul aus den offenen Zonen), niedrig, mittel, hoch und „Auto“ (vom Thermostat geregelt). Die Auswahl erscheint nur, wenn der Installateur sie freigibt.
+- Je nach Steuermodul gibt es einen Modus „nur Lüften“ und einen Entfeuchtungsmodus. **Offen:** wie diese Modi im Status gemeldet werden.
+
+**Weitere Funktionen**
+- Timer am Thermostat 0–120 Minuten in 10-Minuten-Schritten (die App bietet 30/60/90/120).
+- Bis zu 6 Programme am Thermostat (in der App höchstens 3 je Zone).
+- „Parada Total“ (Anlage stoppen) lässt sich je nach Firmware am Thermostat abschalten.
+- Ein Alarm-Eingang (z. B. Fensterkontakt) schaltet die Zone ab; er muss ab Werk freigeschaltet sein.
+

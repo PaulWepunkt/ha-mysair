@@ -54,6 +54,21 @@
         "name": "Parar instalación"
       }
     },
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "zonal": "Zonal (por defecto)",
+              "1": "Baja",
+              "2": "Media",
+              "3": "Alta",
+              "auto": "Auto"
+            }
+          }
+        }
+      }
+    },
     "select": {
       "operating_mode": {
         "name": "Modo de funcionamiento",

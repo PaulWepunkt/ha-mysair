@@ -54,6 +54,21 @@
         "name": "Anlage stoppen"
       }
     },
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "zonal": "Zonal (Standard)",
+              "1": "Niedrig",
+              "2": "Mittel",
+              "3": "Hoch",
+              "auto": "Automatik"
+            }
+          }
+        }
+      }
+    },
     "select": {
       "operating_mode": {
         "name": "Betriebsart",

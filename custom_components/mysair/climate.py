@@ -1,7 +1,6 @@
 import logging
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
-    FAN_OFF,
     ClimateEntityFeature,
     HVACMode,
     HVACAction,
@@ -27,10 +26,18 @@ _LOGGER = logging.getLogger(__name__)
 # Fan speed (command/field "fanspeed"/"vv"): mapping confirmed from the real
 # component of the official app (see docs/protocol-findings.md §9).
 FAN_MODE_AUTO = "auto"
-# "0" = no fan mode active; the app's fan icon toggles between "0" and "4".
-_FAN_MODE_WIRE_TO_HA = {"0": FAN_OFF, "1": "1", "2": "2", "3": "3", "4": FAN_MODE_AUTO}
+# "0" = zonal speed: the default, chosen by the control module from the open
+# zones (thermostat manual); the app's fan icon toggles between "0" and "4".
+FAN_MODE_ZONAL = "zonal"
+_FAN_MODE_WIRE_TO_HA = {
+    "0": FAN_MODE_ZONAL,
+    "1": "1",
+    "2": "2",
+    "3": "3",
+    "4": FAN_MODE_AUTO,
+}
 _FAN_MODE_HA_TO_WIRE = {v: k for k, v in _FAN_MODE_WIRE_TO_HA.items()}
-_FAN_MODES = [FAN_OFF, "1", "2", "3", FAN_MODE_AUTO]
+_FAN_MODES = [FAN_MODE_ZONAL, "1", "2", "3", FAN_MODE_AUTO]
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -70,6 +77,8 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
     # own and inherits the device (zone) name. See device.py.
     _attr_has_entity_name = True
     _attr_name = None
+    # Only used for the translated fan modes ("zonal", "auto", ...).
+    _attr_translation_key = "thermostat"
 
     def __init__(
         self, hass, api, mqtt_client, coordinator, entry, inst_ref, device_id, name
