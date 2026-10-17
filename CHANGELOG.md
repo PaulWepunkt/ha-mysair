@@ -8,6 +8,8 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-17
+
 > ⚠️ **Vor dem Update lesen:** Heizen und Kühlen folgen jetzt der Richtung der ganzen Anlage. Läuft eine Zone, kann eine andere Zone nicht mehr in der Gegenrichtung eingeschaltet werden. Der Schalter „Fußbodenheizung“ zeigt nur noch „an“, solange die Zone läuft. Fußbodenkühlung muss in den Optionen ausdrücklich erlaubt werden.
 
 ### Added
