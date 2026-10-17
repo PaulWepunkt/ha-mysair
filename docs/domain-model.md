@@ -148,6 +148,7 @@ Werte und Ableitungen sind in `status_parser.parse_status_payload` zusammengefas
 | Modus `auto` | 🟢 Vom Protokoll nicht unterstützt | `m` (0–5) deckt genau die sechs Kombinationen Luft/Fußboden × Heizen/Kühlen ab. Die einzige echte Automatik ist die Lüfterstufe (`vv="4"`). |
 | Timer / Programme | 🟡 Geplant | Befehle bestätigt (`temporizer` mit 30/60/90/120 Minuten oder `"0"`; `programs`, `update-program`, `delete-program`). Das Programmobjekt muss noch mit echtem Datenverkehr bestätigt werden. Siehe `known-unknowns.md` #27. |
 | Medium beim Einschalten | ✅ Optionen + Auswahl je Zone | Erlaubte Medien je Richtung in den Optionen; „Heizen mit“/„Kühlen mit“ je Zone. Nur lokal, nichts im Protokoll. |
+| Wärmepumpe ohne Umschaltung durch MySair | ✅ „Betriebsart festhalten“ | Richtung von Hand passend zur Wärmepumpe; HA schaltet nur in dieser Richtung ein, „Betriebsart weicht ab“ meldet Abweichungen. Nur lokal. |
 | Saisonwechsel | ✅ Auswahl „Betriebsart“ | Nur bei ausgeschalteter Anlage; wie in der App nur lokal gemerkt und mit dem nächsten Einschalten gesendet. |
 | Anlage stoppen | ✅ Knopf und Dienst | Befehl `stop` an die Hauptzone. |
 | Richtung der Anlage | ✅ wie in der App | Eine Richtung je Installation (Parität von `m` der ersten laufenden Zone, sonst der ersten Zone); Wechsel nur, wenn alle Zonen aus sind. Siehe `protocol-findings.md` §4b. |

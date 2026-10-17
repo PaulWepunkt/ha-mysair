@@ -47,6 +47,9 @@
       },
       "direction_conflict": {
         "name": "Heat/cool conflict"
+      },
+      "direction_mismatch": {
+        "name": "Operating mode mismatch"
       }
     },
     "button": {
@@ -136,6 +139,9 @@
       },
       "floor_heating": {
         "name": "Floor heating"
+      },
+      "hold_direction": {
+        "name": "Hold operating mode"
       }
     }
   },
@@ -184,6 +190,9 @@
     },
     "floor_heating_disabled": {
       "message": "Floor heating is disabled in the MySair integration options."
+    },
+    "direction_held": {
+      "message": "The operating mode is held at the other direction (to match the heat pump). Change the operating mode first."
     }
   }
 }

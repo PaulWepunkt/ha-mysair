@@ -40,7 +40,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     _LOGGER.info(f"[MySair Select] {len(entities)} selects created.")
 
 
-class MySairOperatingModeSelect(MySairInstallationEntity, SelectEntity):
+class MySairOperatingModeSelect(MySairInstallationEntity, RestoreEntity, SelectEntity):
     """Heat/cool direction of the whole installation.
 
     Shows the direction also while all zones are off (rule of the app:
@@ -48,6 +48,11 @@ class MySairOperatingModeSelect(MySairInstallationEntity, SelectEntity):
     while all zones are off; like in the app nothing is sent then, the next
     zone that is turned on starts in the chosen direction
     (docs/protocol-findings.md §4b).
+
+    With "Betriebsart festhalten" (switch on the installation device) the
+    selection is the held direction instead: it matches a heat pump that
+    MySair does not switch, can be changed at any time and is kept over a
+    restart.
     """
 
     _attr_translation_key = "operating_mode"
@@ -55,6 +60,19 @@ class MySairOperatingModeSelect(MySairInstallationEntity, SelectEntity):
 
     def __init__(self, coordinator, inst_ref, name):
         super().__init__(coordinator, inst_ref, name, "operating_mode")
+
+    async def async_added_to_hass(self):
+        extra = await self.async_get_last_extra_data()
+        held = extra.as_dict().get("held_is_heat") if extra is not None else None
+        if held is not None:
+            self.coordinator.restore_held_direction(self.inst_ref, held)
+        await super().async_added_to_hass()
+
+    @property
+    def extra_restore_state_data(self) -> RestoredExtraData:
+        return RestoredExtraData(
+            {"held_is_heat": self.coordinator.held_direction(self.inst_ref)}
+        )
 
     @property
     def current_option(self):

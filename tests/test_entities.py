@@ -1017,6 +1017,8 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert names["binary_sensor.mysair_inst_a_in_betrieb"] == "MySair INST_A In Betrieb"
     assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
     assert names["select.salon_heizen_mit"] == "Salon Heizen mit"
+    assert "switch.mysair_inst_a_betriebsart_festhalten" in names
+    assert "binary_sensor.mysair_inst_a_betriebsart_weicht_ab" in names
     assert names["select.salon_kuhlen_mit"] == "Salon Kühlen mit"
 
 
@@ -1743,3 +1745,140 @@ async def test_options_change_updates_select_options(hass, monkeypatch):
         "floor",
         "air_and_floor",
     ]
+
+
+# --- Hold the operating mode ("Betriebsart festhalten") ---
+
+
+async def _hold(hass, on=True):
+    switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
+    await hass.services.async_call(
+        "switch", "turn_on" if on else "turn_off", {"entity_id": switch}, blocking=True
+    )
+    return switch
+
+
+async def test_hold_switch_is_config_and_off_by_default(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
+    entry = er.async_get(hass).async_get(switch)
+    assert entry.entity_category == "config"
+    assert hass.states.get(switch).state == "off"
+
+
+async def test_hold_takes_over_current_direction_and_limits_turn_on(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    await _hold(hass)
+
+    assert hass.states.get(select).state == "heat"
+    # All zones off: only the held direction is offered.
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "heat"]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "climate",
+            "set_hvac_mode",
+            {"entity_id": "climate.salon", "hvac_mode": "cool"},
+            blocking=True,
+        )
+    assert calls == []
+
+
+async def test_held_direction_changes_anytime_without_sending(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "0", True), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    await _hold(hass)
+
+    # A zone runs in heat; the heat pump was switched to cool at its own
+    # controller: the held direction can still be changed.
+    await _select_medium(hass, select, "cool")
+    assert calls == []
+    assert hass.states.get(select).state == "cool"
+
+    mismatch = _entity_id(hass, "binary_sensor", "mysair_direction_mismatch_INST_A")
+    assert hass.states.get(mismatch).state == "on"
+
+    # No zone can be turned on while the installation runs against the held
+    # direction (neither in the held nor in the running direction).
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": "switch.cocina_power"}, blocking=True
+        )
+    assert err.value.translation_key == "direction_locked"
+    assert hass.states.get("climate.cocina").attributes["hvac_modes"] == ["off"]
+    assert calls == []
+
+
+async def test_mismatch_sensor_reports_zone_started_elsewhere(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    mismatch = _entity_id(hass, "binary_sensor", "mysair_direction_mismatch_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "1", False), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+    await _hold(hass)
+    assert hass.states.get(mismatch).state == "off"
+
+    # Someone turns a zone on in heat at the wall thermostat.
+    _fire_zones(hass, _mode_zone("DEV_2", "0", True))
+    await hass.async_block_till_done()
+    assert hass.states.get(mismatch).state == "on"
+    # The held direction stays; it is not taken over from the zones.
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    assert hass.states.get(select).state == "cool"
+
+
+async def test_mismatch_sensor_off_without_hold(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    mismatch = _entity_id(hass, "binary_sensor", "mysair_direction_mismatch_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "0", True), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    assert hass.states.get(mismatch).state == "off"
+
+
+async def test_held_turn_on_uses_held_direction(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    await _hold(hass)
+    await _select_medium(hass, select, "cool")
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+    )
+    assert calls[-1]["value"] == "1"
+
+
+async def test_hold_and_held_direction_are_restored(hass, monkeypatch):
+    from pytest_homeassistant_custom_component.common import (
+        mock_restore_cache_with_extra_data,
+    )
+    from homeassistant.core import State
+
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (State("switch.mysair_inst_a_hold_operating_mode", "on"), {}),
+            (
+                State("select.mysair_inst_a_operating_mode", "cool"),
+                {"held_is_heat": False},
+            ),
+        ],
+    )
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    switch = _entity_id(hass, "switch", "mysair_hold_direction_INST_A")
+    select = _entity_id(hass, "select", "mysair_operating_mode_INST_A")
+    assert switch == "switch.mysair_inst_a_hold_operating_mode"
+    assert hass.states.get(switch).state == "on"
+    assert hass.states.get(select).state == "cool"

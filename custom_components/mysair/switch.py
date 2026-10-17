@@ -1,13 +1,16 @@
 import logging
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .availability import AvailabilityMixin
 from .command_feedback import CommandFeedbackMixin
 from .const import DOMAIN
 from .device import zone_device_info
 from .coordinator import signal_zone_update
+from .installation_entity import MySairInstallationEntity, installation_entities
 from .zone_control import command_error, floor_command, turn_on_mode
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +42,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                         zone_name,
                     )
                 )
+
+    entities += installation_entities(hass, entry, (MySairHoldDirectionSwitch,))
 
     async_add_entities(entities)
     _LOGGER.info(f"[MySair Switch] {len(entities)} switches created.")
@@ -260,4 +265,44 @@ class MySairFloorSwitch(CommandFeedbackMixin, AvailabilityMixin, SwitchEntity):
         _LOGGER.debug(
             f"[MySair Switch] Floor heating {self.name}: {'ON' if self._is_on else 'OFF'}"
         )
+        self.async_write_ha_state()
+
+
+class MySairHoldDirectionSwitch(MySairInstallationEntity, RestoreEntity, SwitchEntity):
+    """Configuration: hold the heat/cool direction ("Betriebsart festhalten").
+
+    For installations whose heat pump is not switched by MySair (it has to
+    be set to heating or cooling at its own controller). When on, the
+    "Betriebsart" select describes the heat pump: Home Assistant only turns
+    zones on in that direction and reports a problem when the installation
+    runs in the other one. Off by default: the behaviour of the app.
+    Nothing is sent to MySair; the setting is kept over a restart.
+    """
+
+    _attr_translation_key = "hold_direction"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator, inst_ref, name):
+        super().__init__(coordinator, inst_ref, name, "hold_direction")
+
+    async def async_added_to_hass(self):
+        last = await self.async_get_last_state()
+        if last is not None and last.state == "on":
+            self.coordinator.set_hold(self.inst_ref, True)
+        await super().async_added_to_hass()
+
+    @property
+    def available(self):
+        return True
+
+    @property
+    def is_on(self):
+        return self.coordinator.is_held(self.inst_ref)
+
+    async def async_turn_on(self, **kwargs):
+        self.coordinator.set_hold(self.inst_ref, True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        self.coordinator.set_hold(self.inst_ref, False)
         self.async_write_ha_state()
