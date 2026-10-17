@@ -8,6 +8,8 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-17
+
 ### Added
 - **Erlaubte Medien je Richtung** in den Optionen: „Heizen mit Luft erlauben“, „Fußbodenheizung erlauben“, „Kühlen mit Luft erlauben“ und das bisherige „Fußbodenkühlung erlauben“. Standard wie bisher (alles außer Fußbodenkühlung erlaubt); je Richtung muss mindestens ein Medium erlaubt sein.
 - **„Heizen mit“ und „Kühlen mit“ je Zone** (Einstellungs-Entitäten): „Wie die MySair-App“ (Standard, Klimaanlage an und Fußboden wie zuletzt), „Nur Luft“, „Nur Fußboden“ oder „Luft und Fußboden“. Gilt für jedes Einschalten über Home Assistant und bleibt über einen Neustart erhalten.
