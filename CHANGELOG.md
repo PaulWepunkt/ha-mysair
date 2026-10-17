@@ -9,6 +9,7 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 ## [Unreleased]
 
 ### Changed
+- Lüfterstufe „Standard“ hat ein eigenes Symbol (einfacher Lüfter) und ist nicht mehr mit „Automatik“ (Lüfter mit „A“) zu verwechseln.
 - **„Passt nicht zur Wärmepumpe“ heißt jetzt „Abgleich Wärmepumpe“** (englisch „Heat pump check“, spanisch „Comprobación bomba de calor“). Gleiche Funktion; der Name beschreibt jetzt, was geprüft wird, sodass „OK“ und „Problem“ eindeutig lesbar sind. Bestehende Entity-IDs bleiben erhalten.
 
 ## [3.3.1] - 2026-10-17

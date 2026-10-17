@@ -32,7 +32,7 @@
           "fan_mode": {
             "default": "mdi:fan",
             "state": {
-              "zonal": "mdi:fan-auto",
+              "zonal": "mdi:fan",
               "1": "mdi:fan-speed-1",
               "2": "mdi:fan-speed-2",
               "3": "mdi:fan-speed-3",
