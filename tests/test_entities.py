@@ -15,6 +15,7 @@ pytest.importorskip("homeassistant")
 import homeassistant.util.dt as dt_util
 from homeassistant.components.climate.const import HVACMode, HVACAction
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import async_update_entity
 from pytest_homeassistant_custom_component.common import (
@@ -985,6 +986,11 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert names["switch.salon_ein_aus"] == "Salon Ein/Aus"
     assert names["switch.salon_fussbodenheizung"] == "Salon Fußbodenheizung"
     assert names["sensor.mysair_cloud_verbindung"] == "MySair Cloud-Verbindung"
+    # Installation device ("MySair INST_A" without a name in the account).
+    assert names["sensor.mysair_inst_a_betriebsart"] == "MySair INST_A Betriebsart"
+    assert names["sensor.mysair_inst_a_hauptzone"] == "MySair INST_A Hauptzone"
+    assert names["binary_sensor.mysair_inst_a_in_betrieb"] == "MySair INST_A In Betrieb"
+    assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
 
 
 async def test_mode_sensor_is_enum_with_translated_options(hass, monkeypatch):
@@ -1240,3 +1246,125 @@ async def test_floor_switch_is_off_while_zone_is_off(hass, monkeypatch):
     _fire_zones(hass, _mode_zone("DEV_1", "4", False), _mode_zone("DEV_2", "0", False))
     await hass.async_block_till_done()
     assert hass.states.get("switch.salon_floor_heating").state == "off"
+
+
+# --- Installation device and its entities (block B) ---
+
+
+def _device(hass, identifier):
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id):
+        if (DOMAIN, identifier) in device.identifiers:
+            return device
+    return None
+
+
+def _installation_state(hass, unique_id, domain="sensor"):
+    entity_id = er.async_get(hass).async_get_entity_id(domain, DOMAIN, unique_id)
+    assert entity_id is not None, unique_id
+    return hass.states.get(entity_id)
+
+
+async def test_device_tree_account_installation_zones(hass, monkeypatch):
+    entry = await _setup_two_zones(hass, monkeypatch, [])
+    account = _device(hass, entry.entry_id)
+    installation = _device(hass, "installation_INST_A")
+    zone = _device(hass, "INST_A_DEV_1")
+    assert installation.via_device_id == account.id
+    assert zone.via_device_id == installation.id
+    assert installation.name == "MySair INST_A"
+
+    # The controller firmware arrives with the status and becomes sw_version.
+    hass.bus.async_fire(
+        f"{DOMAIN}_update",
+        {
+            "topic": "pro/v1/get/ctl/INST_A/status",
+            "data": {"ctl": "INST_A", "firmware": "1.2.3", "zones": [_zone()]},
+        },
+    )
+    await hass.async_block_till_done()
+    installation = _device(hass, "installation_INST_A")
+    assert installation.sw_version == "1.2.3"
+
+
+async def test_installation_device_uses_installation_name(hass, monkeypatch):
+    _patch_happy_api(monkeypatch)
+    monkeypatch.setattr(
+        MySairAPI,
+        "get_installations",
+        lambda self, location_id: [{"reference": "INST_A", "name": "Casa"}],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="user@example.com",
+        data={"email": "user@example.com", "refresh_token": "OLD_REFRESH"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    installation = _device(hass, "installation_INST_A")
+    assert installation.name == "Casa"
+
+
+async def test_installation_entities_unavailable_until_first_status(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    state = _installation_state(hass, "mysair_operating_mode_INST_A")
+    assert state.state == "unavailable"
+
+
+async def test_operating_mode_and_running_follow_zones(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    _fire_zones(hass, _mode_zone("DEV_1", "1", False), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+
+    # All off: the direction is still shown (from the first zone).
+    assert _installation_state(hass, "mysair_operating_mode_INST_A").state == "cool"
+    running = _installation_state(
+        hass, "mysair_installation_active_INST_A", "binary_sensor"
+    )
+    assert running.state == "off"
+
+    _fire_zones(hass, _mode_zone("DEV_2", "0", True))
+    await hass.async_block_till_done()
+    assert _installation_state(hass, "mysair_operating_mode_INST_A").state == "heat"
+    running = _installation_state(
+        hass, "mysair_installation_active_INST_A", "binary_sensor"
+    )
+    assert running.state == "on"
+
+
+async def test_direction_conflict_sensor(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    _fire_zones(hass, _mode_zone("DEV_1", "0", True), _mode_zone("DEV_2", "0", True))
+    await hass.async_block_till_done()
+    conflict = _installation_state(
+        hass, "mysair_direction_conflict_INST_A", "binary_sensor"
+    )
+    assert conflict.state == "off"
+
+    _fire_zones(hass, _mode_zone("DEV_2", "1", True))
+    await hass.async_block_till_done()
+    conflict = _installation_state(
+        hass, "mysair_direction_conflict_INST_A", "binary_sensor"
+    )
+    assert conflict.state == "on"
+
+
+async def test_main_zone_sensor_shows_device_name(hass, monkeypatch):
+    await _setup_two_zones(hass, monkeypatch, [])
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", False, is_main=False),
+        _mode_zone("DEV_2", "0", False, is_main=True),
+    )
+    await hass.async_block_till_done()
+    assert _installation_state(hass, "mysair_main_zone_INST_A").state == "Cocina"
+
+    # A zone renamed in Home Assistant shows its new name.
+    registry = dr.async_get(hass)
+    zone = _device(hass, "INST_A_DEV_2")
+    registry.async_update_device(zone.id, name_by_user="Kitchen")
+    _fire_zones(hass, _mode_zone("DEV_2", "0", False, is_main=True))
+    await hass.async_block_till_done()
+    assert _installation_state(hass, "mysair_main_zone_INST_A").state == "Kitchen"

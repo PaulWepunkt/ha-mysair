@@ -13,13 +13,19 @@ from homeassistant.helpers import device_registry as dr
 
 from .api import MySairAPI, MySairAuthError, MySairConnectionError
 from .coordinator import MySairCoordinator
+from .device import (
+    account_device_info,
+    installation_device_info,
+    installation_identifier,
+    zone_device_info,
+)
 from .mqtt_handler import MySairMQTTClient
 from .status_parser import parse_status_payload, parse_feedback_payload
 from .const import DOMAIN, SERVICE_STOP_INSTALLATION, ATTR_INSTALLATION_REF
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["climate", "sensor", "switch"]
+PLATFORMS = ["binary_sensor", "climate", "sensor", "switch"]
 
 STOP_INSTALLATION_SCHEMA = vol.Schema({vol.Required(ATTR_INSTALLATION_REF): str})
 
@@ -36,6 +42,35 @@ def _persist_refresh_token(
     )
 
 
+def _register_devices(
+    hass: HomeAssistant, entry: ConfigEntry, installation_names: dict, all_devices
+) -> None:
+    """Create the device tree before the platforms load.
+
+    Account (cloud connection) → installation (controller) → zones. The links
+    (``via_device_id``) need the registry ids of the parents, so the devices
+    are created here; the entities later register the same identifiers,
+    which leaves the links untouched.
+    """
+    device_registry = dr.async_get(hass)
+    account = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id, **account_device_info(entry.entry_id)
+    )
+    for inst_ref, name in installation_names.items():
+        installation = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            via_device_id=account.id,
+            **installation_device_info(inst_ref, name),
+        )
+        for dev in all_devices.get(inst_ref, []):
+            dev_id = dev.get("reference") or dev.get("rf") or dev.get("id")
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                via_device_id=installation.id,
+                **zone_device_info(inst_ref, dev_id, dev.get("name", f"Zone {dev_id}")),
+            )
+
+
 def _cleanup_stale_zone_devices(
     hass: HomeAssistant, entry: ConfigEntry, all_devices: dict
 ) -> None:
@@ -48,12 +83,13 @@ def _cleanup_stale_zone_devices(
     ``(DOMAIN, f"{inst_ref}_{device_id}")`` (see ``device.py``); the account
     device of the cloud connection sensor uses ``entry.entry_id`` as its
     identifier and is never touched here, since it is not a zone.
+    Installation devices of installations that still exist are kept too.
     """
     current_zone_ids = {
         f"{inst_ref}_{dev.get('reference') or dev.get('rf') or dev.get('id')}"
         for inst_ref, devices in all_devices.items()
         for dev in devices
-    }
+    } | {installation_identifier(inst_ref) for inst_ref in all_devices}
     device_registry = dr.async_get(hass)
     for device_entry in dr.async_entries_for_config_entry(
         device_registry, entry.entry_id
@@ -140,9 +176,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
         all_devices = {}
         installation_refs = []
+        installation_names = {}
         for inst in installations:
             ref = inst["reference"]
             installation_refs.append(ref)
+            installation_names[ref] = inst.get("name")
             devices = await hass.async_add_executor_job(api.get_devices, ref)
             all_devices[ref] = devices
             _LOGGER.info(
@@ -156,6 +194,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         raise ConfigEntryNotReady(f"Could not connect to MySair: {err}") from err
 
     _cleanup_stale_zone_devices(hass, entry, all_devices)
+    _register_devices(hass, entry, installation_names, all_devices)
 
     # Store runtime data
     hass.data.setdefault(DOMAIN, {})
@@ -163,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         "api": api,
         "devices": all_devices,
         "installations": installation_refs,
+        "installation_names": installation_names,
         "mqtt": None,
         "coordinator": None,
     }
@@ -253,7 +293,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # entity repeating the same topic/ctl/zone_id filtering (see
     # coordinator.py). Started before the platforms so it is already
     # listening when the entities are added. ---
-    coordinator = MySairCoordinator(hass, installation_refs)
+    coordinator = MySairCoordinator(hass, installation_refs, entry.entry_id)
     coordinator.start()
     hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 

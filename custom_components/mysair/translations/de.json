@@ -41,6 +41,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "installation_active": {
+        "name": "In Betrieb"
+      },
+      "direction_conflict": {
+        "name": "Heiz-/Kühlkonflikt"
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "name": "Cloud-Verbindung",
@@ -70,6 +78,16 @@
             }
           }
         }
+      },
+      "operating_mode": {
+        "name": "Betriebsart",
+        "state": {
+          "heat": "Heizen",
+          "cool": "Kühlen"
+        }
+      },
+      "main_zone": {
+        "name": "Hauptzone"
       }
     },
     "switch": {

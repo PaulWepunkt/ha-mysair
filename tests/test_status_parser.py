@@ -10,6 +10,7 @@ import pytest
 from status_parser import (
     compute_mode_value,
     floor_change_command,
+    has_direction_conflict,
     installation_is_heat,
     turn_on_mode_value,
     parse_mode,
@@ -301,12 +302,17 @@ def test_parse_status_payload_default_power_off_when_missing_e():
 def test_parse_status_payload_invalid_value_yields_no_zones():
     assert parse_status_payload({"ctl": "X", "value": "no-json"}) == {
         "ctl": "X",
+        "firmware": None,
         "zones": [],
     }
 
 
 def test_parse_status_payload_missing_value():
-    assert parse_status_payload({"ctl": "Z"}) == {"ctl": "Z", "zones": []}
+    assert parse_status_payload({"ctl": "Z"}) == {
+        "ctl": "Z",
+        "firmware": None,
+        "zones": [],
+    }
 
 
 def test_parse_status_payload_non_dict_input():
@@ -327,7 +333,7 @@ def test_parse_status_payload_t_not_a_list_logs_warning_and_yields_no_zones(capl
 
     result = parse_status_payload(payload)
 
-    assert result == {"ctl": "X", "zones": []}
+    assert result == {"ctl": "X", "firmware": None, "zones": []}
     assert "field 't' has an unexpected shape" in caplog.text
 
 
@@ -410,3 +416,16 @@ def test_parse_status_payload_main_zone():
     }
     zones = parse_status_payload(payload)["zones"]
     assert [z["is_main"] for z in zones] == [False, True]
+
+
+def test_parse_status_payload_firmware():
+    payload = {"ctl": "INST_A", "value": {"v": "1.2.3", "t": []}}
+    assert parse_status_payload(payload)["firmware"] == "1.2.3"
+
+
+def test_has_direction_conflict():
+    assert has_direction_conflict([_z(True, True), _z(True, False)]) is True
+    # Zones that are off do not count.
+    assert has_direction_conflict([_z(True, True), _z(False, False)]) is False
+    assert has_direction_conflict([_z(True, None), _z(True, True)]) is False
+    assert has_direction_conflict([]) is False

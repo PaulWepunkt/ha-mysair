@@ -34,9 +34,12 @@ ha-mysair/
 │   ├── coordinator.py            # MySairCoordinator: verteilt Zustände je Zone
 │   ├── command_feedback.py       # Bestätigung von Befehlen über das feedback-Topic
 │   ├── availability.py           # Verfügbarkeit nach Aktualität der MQTT-Daten
-│   ├── device.py                 # Gemeinsame Geräteinformationen je Zone/Konto
+│   ├── device.py                 # Gerätebaum Konto → Installation → Zone
+│   ├── zone_control.py           # Regeln der App für Einschalten, Richtung, Fußboden
+│   ├── installation_entity.py    # Basisklasse für Entitäten am Installationsgerät
+│   ├── binary_sensor.py          # „In Betrieb“ und „Heiz-/Kühlkonflikt“ je Installation
 │   ├── climate.py                # MySairThermostat (ClimateEntity)
-│   ├── sensor.py                 # 4 Sensoren je Zone + Sensor „Cloud-Verbindung“
+│   ├── sensor.py                 # 4 Sensoren je Zone, „Betriebsart“/„Hauptzone“ je Installation, „Cloud-Verbindung“
 │   ├── switch.py                 # Ein/Aus und Fußbodenheizung je Zone
 │   ├── config_flow.py            # Einrichtungsdialog (E-Mail + Passwort), Reauth
 │   ├── diagnostics.py            # Diagnose-Download mit geschwärzten Zugangsdaten

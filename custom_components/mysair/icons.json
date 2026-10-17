@@ -1,5 +1,19 @@
 {
   "entity": {
+    "binary_sensor": {
+      "installation_active": {
+        "default": "mdi:hvac",
+        "state": {
+          "off": "mdi:hvac-off"
+        }
+      },
+      "direction_conflict": {
+        "default": "mdi:alert-outline",
+        "state": {
+          "off": "mdi:check-circle-outline"
+        }
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "default": "mdi:cloud-check",
@@ -17,6 +31,16 @@
           "heat": "mdi:fire",
           "cool": "mdi:snowflake"
         }
+      },
+      "operating_mode": {
+        "default": "mdi:sun-snowflake-variant",
+        "state": {
+          "heat": "mdi:fire",
+          "cool": "mdi:snowflake"
+        }
+      },
+      "main_zone": {
+        "default": "mdi:home-thermometer-outline"
       }
     },
     "switch": {

@@ -22,10 +22,11 @@ config_flow.py ──login──► api.py (MySairAPI, synchrones HTTP mit reque
 __init__.py (async_setup_entry):
    refresh_tokens → get_locations → get_installations → get_devices
    → _cleanup_stale_zone_devices (verschwundene Zonen entfernen)
-   → hass.data[DOMAIN][entry_id] = {api, devices, installations, mqtt, coordinator}
+   → _register_devices (Gerätebaum: Konto → Installation → Zonen, via_device_id)
+   → hass.data[DOMAIN][entry_id] = {api, devices, installations, installation_names, mqtt, coordinator}
    → MySairMQTTClient.start()  (Daemon-Thread, WSS zu AWS IoT)
    → MySairCoordinator.start()  (coordinator.py, einziger Bus-Abonnent je Entry)
-   → Plattformen laden: climate, sensor, switch
+   → Plattformen laden: binary_sensor, climate, sensor, switch
    → refresh_status_periodic()  (Hintergrund-Task, status alle 120 s)
 
 MQTT (mqtt_handler.py) empfängt .../status
@@ -88,9 +89,11 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `command_feedback.py` | `CommandFeedbackMixin`: ordnet Befehle der Quittung aus `mysair_feedback` zu und setzt bei Zeitüberschreitung zurück (climate/switch) |
 | `zone_control.py` | Regeln der App für Einschalten, Richtung der Anlage und Fußboden; übersetzte Fehler (`ServiceValidationError`) |
 | `availability.py` | `AvailabilityMixin`: `should_poll=False` + `available` nach Aktualität des letzten MQTT-Status |
-| `device.py` | `zone_device_info`/`account_device_info`: gemeinsames Gerät für alle Entitäten einer Zone bzw. für das Konto. Der Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`) |
+| `device.py` | Gerätebaum: `account_device_info` (Konto, Cloud-Verbindung) → `installation_device_info` (Steuerung, Software-Version aus `v`) → `zone_device_info`. Der Zonen-Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`). Geräte nur über `find_device` (je Config Entry) suchen, nicht über das abgekündigte `async_get_device` |
+| `installation_entity.py` | Basisklasse für Entitäten am Installationsgerät (Signal `signal_installation_update`, `AvailabilityMixin`) |
+| `binary_sensor.py` | Je Installation: „In Betrieb“ (mindestens eine Zone an) und „Heiz-/Kühlkonflikt“ (Diagnose) |
 | `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
-| `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) |
+| `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Betriebsart“ (Heizen/Kühlen) und „Hauptzone“ (Diagnose) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) |
 | `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen („Fußbodenkühlung erlauben“) |
 | `const.py` | Konstanten (Zeitlimits, Abfrageintervall des Verbindungssensors, Dienstname) |

@@ -139,6 +139,20 @@ def installation_is_heat(zones):
     return bool(first["is_heat"]) if first is not None else None
 
 
+def has_direction_conflict(zones):
+    """True if zones that are on report different heat/cool directions.
+
+    The app prevents this (docs/protocol-findings.md §4b), but another
+    client or a manual change at a thermostat could still cause it.
+    """
+    directions = {
+        bool(z["is_heat"])
+        for z in zones
+        if z.get("is_on") and z.get("is_heat") is not None
+    }
+    return len(directions) > 1
+
+
 def turn_on_mode_value(is_heat, keep_floor):
     """``m`` to send when a zone is turned on (app: ``togglePowerDevice``).
 
@@ -249,7 +263,9 @@ def parse_status_payload(payload):
             }
         )
 
-    return {"ctl": ctl_ref, "zones": zone_states}
+    # Controller firmware (installation-level "v"; not the zone fan flag "v").
+    firmware = _to_str(parsed_value.get("v")) or None
+    return {"ctl": ctl_ref, "firmware": firmware, "zones": zone_states}
 
 
 def parse_feedback_payload(payload):

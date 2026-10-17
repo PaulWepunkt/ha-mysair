@@ -309,14 +309,14 @@ async def test_stop_installation_service_calls_api(hass, monkeypatch):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    calls.clear()  # ignore the "status" call of the periodic refresh (__init__.py)
+    # The periodic refresh (__init__.py) also sends "status"; only "stop" counts.
 
     assert hass.services.has_service(DOMAIN, SERVICE_STOP_INSTALLATION)
     await hass.services.async_call(
         DOMAIN, SERVICE_STOP_INSTALLATION, {"installation_ref": "INST_A"}, blocking=True
     )
     # No status yet: the main zone is unknown, the device stays empty.
-    assert calls == [("INST_A", "stop", "")]
+    assert [c for c in calls if c[1] == "stop"] == [("INST_A", "stop", "")]
 
     # Like the official app, the stop goes to the main zone (pl="1").
     hass.bus.async_fire(
@@ -337,7 +337,7 @@ async def test_stop_installation_service_calls_api(hass, monkeypatch):
     await hass.services.async_call(
         DOMAIN, SERVICE_STOP_INSTALLATION, {"installation_ref": "INST_A"}, blocking=True
     )
-    assert calls == [("INST_A", "stop", "DEV_2")]
+    assert [c for c in calls if c[1] == "stop"] == [("INST_A", "stop", "DEV_2")]
 
 
 async def test_stop_installation_service_unknown_installation_raises(hass, monkeypatch):
