@@ -48,8 +48,8 @@
       "direction_conflict": {
         "name": "Heat/cool conflict"
       },
-      "direction_mismatch": {
-        "name": "Mismatch with heat pump"
+      "heat_pump_check": {
+        "name": "Heat pump check"
       }
     },
     "button": {

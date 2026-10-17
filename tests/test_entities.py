@@ -1068,7 +1068,7 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
     assert names["select.salon_heizen_mit"] == "Salon Heizen mit"
     assert "switch.mysair_inst_a_mysair_schaltet_warmepumpe" in names
-    assert "binary_sensor.mysair_inst_a_passt_nicht_zur_warmepumpe" in names
+    assert "binary_sensor.mysair_inst_a_abgleich_warmepumpe" in names
     assert names["select.salon_kuhlen_mit"] == "Salon Kühlen mit"
 
 

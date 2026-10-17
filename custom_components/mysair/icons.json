@@ -13,7 +13,7 @@
           "off": "mdi:check-circle-outline"
         }
       },
-      "direction_mismatch": {
+      "heat_pump_check": {
         "default": "mdi:alert",
         "state": {
           "off": "mdi:check-circle-outline"

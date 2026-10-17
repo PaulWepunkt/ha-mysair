@@ -48,8 +48,8 @@
       "direction_conflict": {
         "name": "Heiz-/Kühlkonflikt"
       },
-      "direction_mismatch": {
-        "name": "Passt nicht zur Wärmepumpe"
+      "heat_pump_check": {
+        "name": "Abgleich Wärmepumpe"
       }
     },
     "button": {

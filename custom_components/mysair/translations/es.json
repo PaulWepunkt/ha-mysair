@@ -48,8 +48,8 @@
       "direction_conflict": {
         "name": "Conflicto calor/frío"
       },
-      "direction_mismatch": {
-        "name": "No coincide con la bomba de calor"
+      "heat_pump_check": {
+        "name": "Comprobación bomba de calor"
       }
     },
     "button": {
