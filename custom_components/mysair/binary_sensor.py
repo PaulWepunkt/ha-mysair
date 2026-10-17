@@ -63,14 +63,15 @@ class MySairDirectionConflictSensor(MySairInstallationEntity, BinarySensorEntity
 
 
 class MySairDirectionMismatchSensor(MySairInstallationEntity, BinarySensorEntity):
-    """Problem: the installation runs in another direction than the heat pump.
+    """ "Abgleich Wärmepumpe": problem when the installation runs in another
+    direction than the heat pump.
 
     Only relevant when "MySair schaltet Wärmepumpe" is off: the held
     direction ("Betriebsart") matches the heat pump, so a zone switched on in the other direction (e.g. at a
     wall thermostat or in the app) works against the heat pump.
     """
 
-    _attr_translation_key = "direction_mismatch"
+    _attr_translation_key = "heat_pump_check"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(self, coordinator, inst_ref, name):
