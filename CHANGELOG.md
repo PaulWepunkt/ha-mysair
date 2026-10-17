@@ -8,6 +8,8 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-10-17
+
 ### Changed
 - **„Betriebsart festhalten“ heißt jetzt „MySair schaltet Wärmepumpe“** und ist umgekehrt: **an** (ab Werk) = MySair schaltet die Wärmepumpe zwischen Heizen und Kühlen um, wie in der App; **aus** = die Wärmepumpe wird an ihrer eigenen Steuerung umgestellt, und „Betriebsart“ beschreibt sie. Wer in 3.3.0 „Betriebsart festhalten“ eingeschaltet hatte, findet den neuen Schalter ausgeschaltet; das Verhalten bleibt gleich. Bestehende Entity-IDs bleiben erhalten und lassen sich in den Entitätseinstellungen neu erzeugen.
 - **„Betriebsart weicht ab“ heißt jetzt „Passt nicht zur Wärmepumpe“** (gleiche Funktion).
