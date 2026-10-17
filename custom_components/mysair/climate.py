@@ -328,7 +328,7 @@ class MySairThermostat(CommandFeedbackMixin, AvailabilityMixin, ClimateEntity):
         self.async_write_ha_state()
 
     @callback
-    def _handle_installation_update(self):
+    def _handle_installation_update(self, from_status=True):
         """Another zone changed: the direction lock may have changed."""
         zone = self.coordinator.zone(self.inst_ref, self.device_id)
         if zone is None:

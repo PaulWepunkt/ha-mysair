@@ -38,8 +38,10 @@ ha-mysair/
 │   ├── zone_control.py           # Regeln der App für Einschalten, Richtung, Fußboden
 │   ├── installation_entity.py    # Basisklasse für Entitäten am Installationsgerät
 │   ├── binary_sensor.py          # „In Betrieb“ und „Heiz-/Kühlkonflikt“ je Installation
+│   ├── select.py                 # „Betriebsart“ je Installation (Saisonwechsel)
+│   ├── button.py                 # „Anlage stoppen“ je Installation
 │   ├── climate.py                # MySairThermostat (ClimateEntity)
-│   ├── sensor.py                 # 4 Sensoren je Zone, „Betriebsart“/„Hauptzone“ je Installation, „Cloud-Verbindung“
+│   ├── sensor.py                 # 4 Sensoren je Zone, „Hauptzone“ je Installation, „Cloud-Verbindung“
 │   ├── switch.py                 # Ein/Aus und Fußbodenheizung je Zone
 │   ├── config_flow.py            # Einrichtungsdialog (E-Mail + Passwort), Reauth
 │   ├── diagnostics.py            # Diagnose-Download mit geschwärzten Zugangsdaten

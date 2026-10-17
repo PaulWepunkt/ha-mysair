@@ -147,6 +147,8 @@ Werte und Ableitungen sind in `status_parser.parse_status_payload` zusammengefas
 |---|---|---|
 | Modus `auto` | 🟢 Vom Protokoll nicht unterstützt | `m` (0–5) deckt genau die sechs Kombinationen Luft/Fußboden × Heizen/Kühlen ab. Die einzige echte Automatik ist die Lüfterstufe (`vv="4"`). |
 | Timer / Programme | 🟡 Geplant | Befehle bestätigt (`temporizer` mit 30/60/90/120 Minuten oder `"0"`; `programs`, `update-program`, `delete-program`). Das Programmobjekt muss noch mit echtem Datenverkehr bestätigt werden. Siehe `known-unknowns.md` #27. |
+| Saisonwechsel | ✅ Auswahl „Betriebsart“ | Nur bei ausgeschalteter Anlage; wie in der App nur lokal gemerkt und mit dem nächsten Einschalten gesendet. |
+| Anlage stoppen | ✅ Knopf und Dienst | Befehl `stop` an die Hauptzone. |
 | Richtung der Anlage | ✅ wie in der App | Eine Richtung je Installation (Parität von `m` der ersten laufenden Zone, sonst der ersten Zone); Wechsel nur, wenn alle Zonen aus sind. Siehe `protocol-findings.md` §4b. |
 | Hauptzone | ✅ ausgewertet | `pl`=`"1"`; Ziel des Befehls `stop`; Sensor „Hauptzone“ am Installationsgerät. |
 | Richtungskonflikt | ✅ überwacht | Laufende Zonen mit unterschiedlicher Parität von `m`; Binärsensor „Heiz-/Kühlkonflikt“. |

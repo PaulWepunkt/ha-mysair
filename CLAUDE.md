@@ -26,7 +26,7 @@ __init__.py (async_setup_entry):
    → hass.data[DOMAIN][entry_id] = {api, devices, installations, installation_names, mqtt, coordinator}
    → MySairMQTTClient.start()  (Daemon-Thread, WSS zu AWS IoT)
    → MySairCoordinator.start()  (coordinator.py, einziger Bus-Abonnent je Entry)
-   → Plattformen laden: binary_sensor, climate, sensor, switch
+   → Plattformen laden: binary_sensor, button, climate, select, sensor, switch
    → refresh_status_periodic()  (Hintergrund-Task, status alle 120 s)
 
 MQTT (mqtt_handler.py) empfängt .../status
@@ -92,8 +92,10 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `device.py` | Gerätebaum: `account_device_info` (Konto, Cloud-Verbindung) → `installation_device_info` (Steuerung, Software-Version aus `v`) → `zone_device_info`. Der Zonen-Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`). Geräte nur über `find_device` (je Config Entry) suchen, nicht über das abgekündigte `async_get_device` |
 | `installation_entity.py` | Basisklasse für Entitäten am Installationsgerät (Signal `signal_installation_update`, `AvailabilityMixin`) |
 | `binary_sensor.py` | Je Installation: „In Betrieb“ (mindestens eine Zone an) und „Heiz-/Kühlkonflikt“ (Diagnose) |
+| `select.py` | Je Installation: „Betriebsart“ (Heizen/Kühlen); Wechsel nur bei ausgeschalteter Anlage, wird wie in der App nur lokal gemerkt (`MySairCoordinator.choose_direction`) |
+| `button.py` | Je Installation: „Anlage stoppen“ (`zone_control.async_stop_installation`, wie der Dienst) |
 | `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
-| `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Betriebsart“ (Heizen/Kühlen) und „Hauptzone“ (Diagnose) |
+| `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Hauptzone“ (Diagnose) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) |
 | `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen („Fußbodenkühlung erlauben“) |
 | `const.py` | Konstanten (Zeitlimits, Abfrageintervall des Verbindungssensors, Dienstname) |

@@ -45,8 +45,9 @@ class MySairInstallationEntity(AvailabilityMixin, Entity):
         return self.coordinator.installation_state(self.inst_ref)
 
     @callback
-    def _handle_installation_update(self):
-        self._mark_status_received()
+    def _handle_installation_update(self, from_status=True):
+        if from_status:
+            self._mark_status_received()
         self.async_write_ha_state()
 
 

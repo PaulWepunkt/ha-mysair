@@ -49,6 +49,20 @@
         "name": "Conflicto calor/frío"
       }
     },
+    "button": {
+      "stop_installation": {
+        "name": "Parar instalación"
+      }
+    },
+    "select": {
+      "operating_mode": {
+        "name": "Modo de funcionamiento",
+        "state": {
+          "heat": "Calor",
+          "cool": "Frío"
+        }
+      }
+    },
     "sensor": {
       "cloud_connection": {
         "name": "Conexión con la nube",
@@ -77,13 +91,6 @@
               "air_and_floor": "Aire y suelo"
             }
           }
-        }
-      },
-      "operating_mode": {
-        "name": "Modo de funcionamiento",
-        "state": {
-          "heat": "Calor",
-          "cool": "Frío"
         }
       },
       "main_zone": {
@@ -122,6 +129,9 @@
     },
     "floor_cooling_disabled": {
       "message": "El suelo refrescante está desactivado en las opciones de la integración MySair."
+    },
+    "stop_failed": {
+      "message": "No se pudo parar la instalación. Comprueba la conexión con MySair y vuelve a intentarlo."
     }
   }
 }

@@ -6,7 +6,6 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
-    HomeAssistantError,
     ServiceValidationError,
 )
 from homeassistant.helpers import device_registry as dr
@@ -21,11 +20,12 @@ from .device import (
 )
 from .mqtt_handler import MySairMQTTClient
 from .status_parser import parse_status_payload, parse_feedback_payload
+from .zone_control import async_stop_installation
 from .const import DOMAIN, SERVICE_STOP_INSTALLATION, ATTR_INSTALLATION_REF
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["binary_sensor", "climate", "sensor", "switch"]
+PLATFORMS = ["binary_sensor", "button", "climate", "select", "sensor", "switch"]
 
 STOP_INSTALLATION_SCHEMA = vol.Schema({vol.Required(ATTR_INSTALLATION_REF): str})
 
@@ -340,26 +340,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             installation_ref = call.data[ATTR_INSTALLATION_REF]
             for entry_data in hass.data.get(DOMAIN, {}).values():
                 if installation_ref in entry_data.get("installations", []):
-                    # Like the official app, the stop goes to the main zone
-                    # (pl="1"). Empty device if no status has arrived yet.
-                    coordinator = entry_data.get("coordinator")
-                    main_zone = (
-                        coordinator.installation_state(installation_ref).main_zone_id
-                        if coordinator
-                        else None
+                    await async_stop_installation(
+                        hass,
+                        entry_data["api"],
+                        entry_data.get("coordinator"),
+                        installation_ref,
                     )
-                    try:
-                        await hass.async_add_executor_job(
-                            entry_data["api"].send_installation_command,
-                            installation_ref,
-                            "stop",
-                            None,
-                            main_zone or "",
-                        )
-                    except Exception as e:
-                        raise HomeAssistantError(
-                            f"Failed to stop installation {installation_ref}: {e}"
-                        ) from e
                     return
             raise ServiceValidationError(
                 f"Installation '{installation_ref}' not found in any configured MySair account."

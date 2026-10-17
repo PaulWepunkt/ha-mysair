@@ -19,10 +19,14 @@ protection that MySair does not report.
 The functions here only decide which command to send; the entities send it.
 """
 
-from homeassistant.exceptions import ServiceValidationError
+import logging
+
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import CONF_ALLOW_FLOOR_COOLING, DOMAIN
 from .status_parser import floor_change_command, turn_on_mode_value
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def control_error(translation_key: str) -> ServiceValidationError:
@@ -108,3 +112,33 @@ def floor_command(coordinator, entry, ctl: str, zone_id: str, floor_on: bool):
     if floor_on and not is_heat and not floor_cooling_allowed(entry):
         raise control_error("floor_cooling_disabled")
     return floor_change_command(is_heat, zone.get("is_on"), zone.get("is_ac"), floor_on)
+
+
+def choose_direction(coordinator, ctl: str, is_heat: bool) -> None:
+    """Choose heat/cool for the whole installation (app: season change).
+
+    Only possible while all zones are off; the next zone that is turned on
+    starts in this direction.
+    """
+    if not coordinator.choose_direction(ctl, is_heat):
+        raise control_error("direction_locked")
+
+
+async def async_stop_installation(hass, api, coordinator, ctl: str) -> None:
+    """Stop all zones of an installation with one command.
+
+    Like the official app, the command goes to the main zone (pl="1"); the
+    device stays empty if no status has arrived yet.
+    """
+    main_zone = (
+        coordinator.installation_state(ctl).main_zone_id if coordinator else None
+    )
+    try:
+        await hass.async_add_executor_job(
+            api.send_installation_command, ctl, "stop", None, main_zone or ""
+        )
+    except Exception as err:
+        _LOGGER.error(f"[MySair] Failed to stop installation {ctl}: {err}")
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="stop_failed"
+        ) from err
