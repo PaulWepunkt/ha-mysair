@@ -37,6 +37,8 @@ Die Geräte bilden einen Baum: **Konto** (MySair) → **Installation** (die MySa
 |---|---|---|---|
 | Cloud-Verbindung | Konto | `sensor.mysair_cloud_verbindung` | Diagnose-Entität: Zustand der MQTT-Verbindung (Verbunden/Getrennt), Zeitpunkt der letzten empfangenen Aktualisierung sowie Kennzahlen zu Wiederverbindungen und zur Nachrichtenauswertung (zur Fehlersuche) |
 | Betriebsart | Installation | `select.<anlage>_betriebsart` | Heizen oder Kühlen – die Richtung der ganzen Anlage, auch wenn alle Zonen aus sind. Umstellbar nur, solange alle Zonen aus sind; wie in der App wird dabei noch nichts gesendet, die nächste eingeschaltete Zone startet in der gewählten Richtung |
+| Betriebsart festhalten | Installation | `switch.<anlage>_betriebsart_festhalten` | Einstellungs-Entität, ab Werk aus. Für Anlagen, deren Wärmepumpe **nicht** von MySair umgeschaltet wird (Heizen/Kühlen wird an der Wärmepumpe selbst eingestellt): Ist sie an, beschreibt „Betriebsart“ die Wärmepumpe. Sie lässt sich dann jederzeit umstellen (es wird nichts gesendet), bleibt über einen Neustart erhalten, und Home Assistant schaltet Zonen nur noch in dieser Richtung ein |
+| Betriebsart weicht ab | Installation | `binary_sensor.<anlage>_betriebsart_weicht_ab` | „Problem“, wenn bei festgehaltener Betriebsart Zonen in der anderen Richtung laufen, z. B. weil sie am Thermostat oder in der App eingeschaltet wurden. Ohne „Betriebsart festhalten“ immer „OK“ |
 | Anlage stoppen | Installation | `button.<anlage>_anlage_stoppen` | Schaltet alle Zonen der Anlage mit einem Befehl aus (wie der Dienst `mysair.stop_installation`) |
 | In Betrieb | Installation | `binary_sensor.<anlage>_in_betrieb` | An, solange mindestens eine Zone läuft |
 | Hauptzone | Installation | `sensor.<anlage>_hauptzone` | Diagnose-Entität: Name der Hauptzone (an sie geht „Anlage stoppen“) |
@@ -91,6 +93,7 @@ Eine MySair-Anlage hat **eine** Richtung (Heizen oder Kühlen) für alle Zonen. 
 - Um die Richtung zu wechseln, also zuerst alle Zonen ausschalten (z. B. mit dem Knopf „Anlage stoppen“), dann die „Betriebsart“ umstellen oder direkt eine Zone in der neuen Richtung einschalten.
 - Änderungen an den Thermostaten in den Räumen oder in der MySair-App übernimmt die Integration aus den Statusmeldungen der Steuerung; wer die Änderung gemacht hat, spielt keine Rolle. Kommt eine Meldung nicht sofort, fragt die Integration den Zustand spätestens alle 2 Minuten ab.
 - Eine umgestellte „Betriebsart“ wirkt nur, wenn die nächste Zone über Home Assistant eingeschaltet wird. Wird sie stattdessen am Thermostat oder in der App eingeschaltet, gilt die Richtung, mit der die Anlage dann tatsächlich startet; die Auswahl zeigt danach diese Richtung.
+- **Wärmepumpe nicht von MySair gesteuert?** Wenn Heizen/Kühlen an der Wärmepumpe selbst umgestellt werden muss, „Betriebsart festhalten“ einschalten und die „Betriebsart“ bei jedem Saisonwechsel passend zur Wärmepumpe stellen. Home Assistant verhindert dann falsches Einschalten über Home Assistant und meldet über „Betriebsart weicht ab“, wenn am Thermostat oder in der App in der anderen Richtung eingeschaltet wurde.
 - Der Dienst **„Anlage stoppen“** (`mysair.stop_installation`) wird wie in der App an die Hauptzone der Anlage gesendet.
 
 ## Bekannte Einschränkungen

@@ -47,6 +47,9 @@
       },
       "direction_conflict": {
         "name": "Heiz-/Kühlkonflikt"
+      },
+      "direction_mismatch": {
+        "name": "Betriebsart weicht ab"
       }
     },
     "button": {
@@ -136,6 +139,9 @@
       },
       "floor_heating": {
         "name": "Fußbodenheizung"
+      },
+      "hold_direction": {
+        "name": "Betriebsart festhalten"
       }
     }
   },
@@ -184,6 +190,9 @@
     },
     "floor_heating_disabled": {
       "message": "Fußbodenheizung ist in den Optionen der MySair-Integration ausgeschaltet."
+    },
+    "direction_held": {
+      "message": "Die Betriebsart ist auf die andere Richtung festgelegt (passend zur Wärmepumpe). Zuerst die Betriebsart umstellen."
     }
   }
 }

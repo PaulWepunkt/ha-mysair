@@ -16,7 +16,13 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensors of each installation."""
     entities = installation_entities(
-        hass, entry, (MySairInstallationActiveSensor, MySairDirectionConflictSensor)
+        hass,
+        entry,
+        (
+            MySairInstallationActiveSensor,
+            MySairDirectionConflictSensor,
+            MySairDirectionMismatchSensor,
+        ),
     )
     async_add_entities(entities)
     _LOGGER.info(f"[MySair BinarySensor] {len(entities)} binary sensors created.")
@@ -54,3 +60,22 @@ class MySairDirectionConflictSensor(MySairInstallationEntity, BinarySensorEntity
     @property
     def is_on(self):
         return self.installation.has_conflict
+
+
+class MySairDirectionMismatchSensor(MySairInstallationEntity, BinarySensorEntity):
+    """Problem: the installation runs in another direction than the held one.
+
+    Only relevant with "Betriebsart festhalten": the held direction matches
+    the heat pump, so a zone switched on in the other direction (e.g. at a
+    wall thermostat or in the app) works against the heat pump.
+    """
+
+    _attr_translation_key = "direction_mismatch"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, coordinator, inst_ref, name):
+        super().__init__(coordinator, inst_ref, name, "direction_mismatch")
+
+    @property
+    def is_on(self):
+        return self.installation.direction_mismatch

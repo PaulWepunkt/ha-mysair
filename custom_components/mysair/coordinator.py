@@ -62,10 +62,28 @@ def signal_installation_update(inst_ref: str) -> str:
 class InstallationState:
     """State of a whole installation derived from its zones."""
 
-    is_heat: bool | None  # direction (True heat, False cool, None unknown)
+    # Direction HA uses for turning zones on (True heat, False cool, None
+    # unknown): the held direction if "hold" is on, otherwise the direction
+    # of the installation (or the one chosen while all zones are off).
+    is_heat: bool | None
     is_on: bool  # at least one zone is on
     main_zone_id: str | None  # zone with pl="1"
     has_conflict: bool  # running zones report different directions
+    # Direction the installation actually runs in (rule of the app), None
+    # if unknown.
+    running_is_heat: bool | None = None
+    # Held direction ("Betriebsart festhalten"), None if hold is off.
+    held_is_heat: bool | None = None
+
+    @property
+    def direction_mismatch(self) -> bool:
+        """The installation runs in the other direction than the held one."""
+        return (
+            self.is_on
+            and self.held_is_heat is not None
+            and self.running_is_heat is not None
+            and self.running_is_heat != self.held_is_heat
+        )
 
 
 class MySairCoordinator:
@@ -89,6 +107,11 @@ class MySairCoordinator:
         # Only held locally, like in the app; it is sent with the next zone
         # that is turned on and dropped as soon as a zone is on.
         self._chosen_is_heat = {}
+        # ctl -> True if the direction is held ("Betriebsart festhalten"):
+        # for installations whose heat pump is not switched by MySair, the
+        # user sets the direction to match the heat pump and HA keeps it.
+        self._hold = {}
+        self._held_is_heat = {}  # ctl -> held direction (kept when hold is off)
         # (ctl, zone_id, is_heat) -> medium chosen for turning the zone on
         # (select entities per zone; restored by them after a restart).
         self._medium_choice = {}
@@ -146,11 +169,40 @@ class MySairCoordinator:
         Returns False if a zone is on (the direction is then locked). Nothing
         is sent: like the app, the next zone that is turned on uses it.
         """
+        if self._hold.get(ctl):
+            # Held direction: it describes the heat pump and can be changed
+            # at any time; nothing is sent to MySair.
+            self._held_is_heat[ctl] = is_heat
+            async_dispatcher_send(self.hass, signal_installation_update(ctl), False)
+            return True
         if self.installation_state(ctl).is_on:
             return False
         self._chosen_is_heat[ctl] = is_heat
         async_dispatcher_send(self.hass, signal_installation_update(ctl), False)
         return True
+
+    def held_direction(self, ctl: str) -> bool | None:
+        """Held direction, also while hold is off (for restoring it)."""
+        return self._held_is_heat.get(ctl)
+
+    def restore_held_direction(self, ctl: str, is_heat: bool) -> None:
+        self._held_is_heat[ctl] = bool(is_heat)
+
+    def is_held(self, ctl: str) -> bool:
+        return bool(self._hold.get(ctl))
+
+    def set_hold(self, ctl: str, enabled: bool) -> None:
+        """Turn holding the direction on or off.
+
+        When turned on without a held direction yet, the current direction
+        of the installation is taken over.
+        """
+        self._hold[ctl] = bool(enabled)
+        if enabled and ctl not in self._held_is_heat:
+            current = self.installation_state(ctl).is_heat
+            if current is not None:
+                self._held_is_heat[ctl] = current
+        async_dispatcher_send(self.hass, signal_installation_update(ctl), False)
 
     def _update_firmware(self, ctl: str, firmware) -> None:
         """Show the controller firmware as software version of the installation device."""
@@ -187,12 +239,18 @@ class MySairCoordinator:
         zones = list(self._zones.get(ctl, {}).values())
         main_zone_id = next((z.get("zone_id") for z in zones if z.get("is_main")), None)
         is_on = any(z.get("is_on") for z in zones)
-        is_heat = installation_is_heat(zones)
+        running = installation_is_heat(zones)
+        is_heat = running
         if not is_on and ctl in self._chosen_is_heat:
             is_heat = self._chosen_is_heat[ctl]
+        held = self._held_is_heat.get(ctl) if self._hold.get(ctl) else None
+        if held is not None:
+            is_heat = held
         return InstallationState(
             is_heat=is_heat,
             is_on=is_on,
             main_zone_id=main_zone_id,
             has_conflict=has_direction_conflict(zones),
+            running_is_heat=running,
+            held_is_heat=held,
         )

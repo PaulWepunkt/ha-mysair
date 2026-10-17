@@ -47,6 +47,9 @@
       },
       "direction_conflict": {
         "name": "Conflicto calor/frío"
+      },
+      "direction_mismatch": {
+        "name": "Modo de funcionamiento distinto"
       }
     },
     "button": {
@@ -136,6 +139,9 @@
       },
       "floor_heating": {
         "name": "Suelo radiante"
+      },
+      "hold_direction": {
+        "name": "Mantener modo de funcionamiento"
       }
     }
   },
@@ -184,6 +190,9 @@
     },
     "floor_heating_disabled": {
       "message": "El suelo radiante está desactivado en las opciones de la integración MySair."
+    },
+    "direction_held": {
+      "message": "El modo de funcionamiento está fijado en el otro modo (según la bomba de calor). Cambia primero el modo de funcionamiento."
     }
   }
 }

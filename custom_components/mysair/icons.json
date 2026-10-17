@@ -12,6 +12,12 @@
         "state": {
           "off": "mdi:check-circle-outline"
         }
+      },
+      "direction_mismatch": {
+        "default": "mdi:alert",
+        "state": {
+          "off": "mdi:check-circle-outline"
+        }
       }
     },
     "button": {
@@ -89,6 +95,12 @@
       },
       "floor_heating": {
         "default": "mdi:heat-wave"
+      },
+      "hold_direction": {
+        "default": "mdi:lock",
+        "state": {
+          "off": "mdi:lock-open-variant-outline"
+        }
       }
     }
   },

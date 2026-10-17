@@ -92,10 +92,11 @@ def allowed_directions(coordinator, entry, ctl: str, zone: dict) -> list[bool]:
     capable = [d for d in (True, False) if _direction_possible(entry, zone, d)]
 
     installation = coordinator.installation_state(ctl)
-    if installation.is_on and installation.is_heat is not None:
-        allowed = [d for d in capable if d == installation.is_heat]
-    else:
-        allowed = capable
+    allowed = capable
+    if installation.is_on and installation.running_is_heat is not None:
+        allowed = [d for d in allowed if d == installation.running_is_heat]
+    if installation.held_is_heat is not None:
+        allowed = [d for d in allowed if d == installation.held_is_heat]
 
     own = zone.get("is_heat")
     if zone.get("is_on") and own is not None and own not in allowed:
@@ -130,11 +131,14 @@ def turn_on_mode(coordinator, entry, ctl: str, zone_id: str, is_heat=None) -> st
         ]
         if possible and is_heat not in possible:
             # The zone cannot run in the installation direction. While all
-            # zones are off the direction is still free (app: season change).
-            if installation.is_on:
+            # zones are off the direction is still free (app: season change),
+            # unless it is held to match the heat pump.
+            if installation.is_on or installation.held_is_heat is not None:
                 raise control_error("direction_locked")
             is_heat = possible[0]
-    elif installation.is_on and installation.is_heat not in (None, is_heat):
+    if installation.held_is_heat is not None and is_heat != installation.held_is_heat:
+        raise control_error("direction_held")
+    if installation.is_on and installation.running_is_heat not in (None, is_heat):
         raise control_error("direction_locked")
 
     allow_air, allow_floor = media_permissions(entry, is_heat)
@@ -153,9 +157,15 @@ def turn_on_mode(coordinator, entry, ctl: str, zone_id: str, is_heat=None) -> st
 def floor_command(coordinator, entry, ctl: str, zone_id: str, floor_on: bool):
     """Command for switching the floor of a zone: ``("mode", m)`` or ``("power", None)``."""
     zone = coordinator.zone(ctl, zone_id) or {}
-    is_heat = coordinator.installation_state(ctl).is_heat
+    installation = coordinator.installation_state(ctl)
+    # A running installation keeps its direction; otherwise the one HA uses.
+    is_heat = (
+        installation.running_is_heat if installation.is_on else installation.is_heat
+    )
     if is_heat is None:
         raise control_error("direction_unknown")
+    if installation.held_is_heat is not None and is_heat != installation.held_is_heat:
+        raise control_error("direction_held")
     allow_air, allow_floor = media_permissions(entry, is_heat)
     if floor_on and not allow_floor:
         raise control_error(
@@ -170,7 +180,8 @@ def choose_direction(coordinator, ctl: str, is_heat: bool) -> None:
     """Choose heat/cool for the whole installation (app: season change).
 
     Only possible while all zones are off; the next zone that is turned on
-    starts in this direction.
+    starts in this direction. If the direction is held (to match a heat pump
+    that MySair does not switch), it can be changed at any time.
     """
     if not coordinator.choose_direction(ctl, is_heat):
         raise control_error("direction_locked")
