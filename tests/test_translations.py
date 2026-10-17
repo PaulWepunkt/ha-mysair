@@ -89,3 +89,19 @@ def test_exception_translations_have_a_message():
     ]:
         for key, value in _load(path)["exceptions"].items():
             assert isinstance(value, dict) and "message" in value, (path.name, key)
+
+
+def _icon_blocks(node):
+    """Yield every icon block with a default and state icons."""
+    if isinstance(node, dict):
+        if "default" in node and isinstance(node.get("state"), dict):
+            yield node
+        for value in node.values():
+            yield from _icon_blocks(value)
+
+
+def test_state_icons_differ_from_default():
+    # hassfest rejects a state icon that repeats the default icon.
+    for block in _icon_blocks(_load(BASE / "icons.json")):
+        for state, icon in block["state"].items():
+            assert icon != block["default"], state
