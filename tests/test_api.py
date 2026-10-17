@@ -354,9 +354,24 @@ def test_send_zone_command_fanspeed_invalid_value_raises(fake_session):
         _api_with_aws(fake_session).send_zone_command("INST", "DEV", "fanspeed", "9")
 
 
+@pytest.mark.parametrize("mode", ["0", "1", "2", "3", "4", "5"])
+def test_send_zone_command_mode_accepts_all_media(fake_session, make_response, mode):
+    # m 0-5: even heat, odd cool; 0/1 air, 2/3 floor, 4/5 air+floor.
+    fake_session.queue("post", _creado(make_response))
+    _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", mode, 20.5)
+    body = fake_session.calls[-1]["json"][0]
+    assert body["value"] == {"mode": mode, "temperature": "20.5"}
+
+
 def test_send_zone_command_invalid_mode_raises(fake_session):
     with pytest.raises(ValueError):
-        _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", "5")
+        _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", "6")
+
+
+def test_send_zone_command_mode_without_setpoint_raises(fake_session):
+    # No invented default setpoint: the caller must send the zone's own value.
+    with pytest.raises(ValueError):
+        _api_with_aws(fake_session).send_zone_command("INST", "DEV", "mode", "0")
 
 
 def test_send_zone_command_missing_params_raises(fake_session):
@@ -398,6 +413,17 @@ def test_send_installation_command_stop(fake_session, make_response):
         "command": "stop",
         "value": "1",
     }
+
+
+def test_send_installation_command_stop_to_main_zone(fake_session, make_response):
+    fake_session.queue("post", _creado(make_response))
+    _api_with_aws(fake_session).send_installation_command(
+        "INST", "stop", device="DEV_MAIN"
+    )
+    body = fake_session.calls[-1]["json"][0]
+    assert body["device"] == "DEV_MAIN"
+    assert body["command"] == "stop"
+    assert body["value"] == "1"
 
 
 def test_send_installation_command_status(fake_session, make_response):

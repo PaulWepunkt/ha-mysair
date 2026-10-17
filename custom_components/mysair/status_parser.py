@@ -107,16 +107,59 @@ def compute_mode_value(is_heat, is_ac, is_floor):
     Confirmed from the official app (`docs/protocol-findings.md` §4):
     ``base``: air=0, floor=2, air+floor=4 (heat); ``+1`` for cool.
 
-    If neither air nor floor would remain active (a combination the app
-    never produces, see `toggleRadiatingFloor`/`setModeHeat`), air is forced
-    on so that no ``m`` value unseen in the bundle is sent.
-    # TODO(verify): exact app behaviour in this edge case is unconfirmed; it
-    should not be reached in normal use (at least one medium stays active).
+    Neither air nor floor active is not a valid ``m``: the app turns the zone
+    off instead (see ``floor_change_command``). As a safety net air is forced
+    on here so that no ``m`` value unseen in the bundle is ever sent.
     """
     if not is_ac and not is_floor:
         is_ac = True
     base = 4 if (is_ac and is_floor) else (2 if is_floor else 0)
     return str(base if is_heat else base + 1)
+
+
+def installation_is_heat(zones):
+    """Heat/cool direction of a whole installation, as the official app sees it.
+
+    The app does not store a direction per zone: every zone shows the
+    direction of the installation, which is the parity of ``m`` of the
+    first zone that is on, or of the first zone if all are off
+    (docs/protocol-findings.md §4). ``zones`` must be in the order the
+    controller reports them.
+
+    Returns True for heat, False for cool, None if no zone has a valid ``m``.
+    """
+    first = None
+    for zone in zones:
+        if zone.get("is_heat") is None:
+            continue
+        if zone.get("is_on"):
+            return bool(zone["is_heat"])
+        if first is None:
+            first = zone
+    return bool(first["is_heat"]) if first is not None else None
+
+
+def turn_on_mode_value(is_heat, keep_floor):
+    """``m`` to send when a zone is turned on (app: ``togglePowerDevice``).
+
+    The app turns the air on, keeps the floor bit the zone already had and
+    uses the direction of the installation.
+    """
+    return compute_mode_value(is_heat, True, keep_floor)
+
+
+def floor_change_command(is_heat, zone_is_on, zone_is_ac, floor_on):
+    """Command for switching the floor medium of a zone (app: ``toggleRadiatingFloor``).
+
+    The air keeps its state (it only counts as active while the zone is on).
+    If neither air nor floor stays active, the app turns the zone off.
+
+    Returns ``("mode", m)`` or ``("power", None)``.
+    """
+    air_on = bool(zone_is_on and zone_is_ac)
+    if not air_on and not floor_on:
+        return "power", None
+    return "mode", compute_mode_value(is_heat, air_on, floor_on)
 
 
 def parse_status_payload(payload):
@@ -200,6 +243,9 @@ def parse_status_payload(payload):
                 "allow_cool": _to_str(t.get("f")) == "1",
                 "allow_fan": _to_str(t.get("v")) == "1",
                 "allow_floor": _to_str(t.get("s")) == "1",
+                # Main zone of the installation (pl="1"): the official app
+                # sends the "stop" command with this zone as the device.
+                "is_main": _to_str(t.get("pl")) == "1",
             }
         )
 

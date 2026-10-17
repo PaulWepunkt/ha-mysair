@@ -80,5 +80,30 @@
         "name": "Fußbodenheizung"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MySair-Optionen",
+        "description": "Einstellungen zum Verhalten der Integration.",
+        "data": {
+          "allow_floor_cooling": "Fußbodenkühlung erlauben"
+        },
+        "data_description": {
+          "allow_floor_cooling": "Nur einschalten, wenn die Anlage für Fußbodenkühlung ausgelegt und gegen Kondenswasser (Taupunkt) geschützt ist. Ausgeschaltet nutzt Home Assistant den Fußboden nicht, solange die Anlage kühlt."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "direction_locked": {
+      "message": "Die Anlage läuft in der anderen Richtung (Heizen/Kühlen). Zuerst alle Zonen ausschalten, dann die neue Richtung wählen."
+    },
+    "direction_unknown": {
+      "message": "Die Richtung der Anlage (Heizen/Kühlen) ist noch nicht bekannt. Bitte auf den ersten Status von MySair warten."
+    },
+    "floor_cooling_disabled": {
+      "message": "Fußbodenkühlung ist in den Optionen der MySair-Integration ausgeschaltet."
+    }
   }
 }

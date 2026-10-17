@@ -8,6 +8,23 @@ Die Abschnitte bis einschließlich 2.13.1 stammen aus dem Ursprungs-Repository u
 
 ## [Unreleased]
 
+> ⚠️ **Vor dem Update lesen:** Heizen und Kühlen folgen jetzt der Richtung der ganzen Anlage. Läuft eine Zone, kann eine andere Zone nicht mehr in der Gegenrichtung eingeschaltet werden. Der Schalter „Fußbodenheizung“ zeigt nur noch „an“, solange die Zone läuft. Fußbodenkühlung muss in den Optionen ausdrücklich erlaubt werden.
+
+### Added
+- **Option „Fußbodenkühlung erlauben“** (Standard: aus) unter Einstellungen → Geräte & Dienste → MySair → Konfigurieren. Ausgeschaltet nutzt die Integration den Fußboden nicht, solange die Anlage kühlt, weil MySair keinen Taupunktschutz meldet.
+- **Verständliche Fehlermeldungen in der Oberfläche** auf Deutsch, Englisch und Spanisch, wenn eine Bedienung nicht erlaubt ist (Richtungswechsel bei laufender Anlage, Fußbodenkühlung ausgeschaltet, Richtung noch unbekannt).
+
+### Changed
+- **Heizen/Kühlen wie in der MySair-App:** Eine Anlage hat eine Richtung für alle Zonen. Läuft mindestens eine Zone, bieten die Thermostate nur „Aus“ und die aktuelle Richtung an; sind alle Zonen aus, ist beides möglich und das Einschalten einer Zone legt die Richtung fest. Bisher konnte jede Zone ihre eigene Richtung senden.
+- **Einschalten wie in der App** (Thermostat und Schalter „Ein/Aus“): Klimaanlage an, Fußboden wie zuletzt, Richtung der Anlage und die aktuelle Soll-Temperatur. Bisher wurden immer 22 °C gesendet, der Fußboden ging verloren, und nach dem Ausschalten wurde bevorzugt „Heizen“ gewählt.
+- **„Anlage stoppen“** wird wie in der App an die Hauptzone der Anlage gesendet statt ohne Zone.
+- Der Schalter „Fußbodenheizung“ zeigt wie die App nur „an“, solange die Zone läuft.
+- Dokumentation: Regeln der App zur Richtung der Anlage, zum Einschalten und zum Stoppen beschrieben (`docs/protocol-findings.md` §4b).
+- Dokumentation zu Timer und Programmen korrigiert: Die App kann Programme schreiben (`update-program`) und löschen (`delete-program`); die Werte des Timers sind bekannt. Die Umsetzung ist geplant (`docs/known-unknowns.md` #27).
+
+### Fixed
+- **Schalter „Fußbodenheizung“ funktionierte nicht:** Die Befehlsprüfung ließ nur die Modi `0` und `1` zu, sodass jeder Befehl mit Fußboden (`2`–`5`) verworfen wurde. Bleibt nach dem Ausschalten des Fußbodens nichts mehr an, wird die Zone jetzt wie in der App ausgeschaltet.
+
 ## [3.0.0] - 2026-10-17
 
 Erstes Release dieses Forks.

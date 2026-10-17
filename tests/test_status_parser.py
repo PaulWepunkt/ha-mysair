@@ -9,6 +9,9 @@ import pytest
 
 from status_parser import (
     compute_mode_value,
+    floor_change_command,
+    installation_is_heat,
+    turn_on_mode_value,
     parse_mode,
     parse_status_payload,
     parse_status_value,
@@ -102,6 +105,54 @@ def test_compute_mode_value_forces_ac_when_neither_medium_active():
     assert compute_mode_value(is_heat=True, is_ac=False, is_floor=False) == "0"
 
 
+# --- Installation direction and app rules (docs/protocol-findings.md §4) ---
+
+
+def _z(is_on, is_heat):
+    return {"is_on": is_on, "is_heat": is_heat}
+
+
+def test_installation_is_heat_first_running_zone_wins():
+    assert installation_is_heat([_z(False, True), _z(True, False)]) is False
+
+
+def test_installation_is_heat_all_off_uses_first_zone():
+    assert installation_is_heat([_z(False, False), _z(False, True)]) is False
+
+
+def test_installation_is_heat_skips_zones_without_valid_mode():
+    assert installation_is_heat([_z(True, None), _z(False, True)]) is True
+
+
+def test_installation_is_heat_unknown():
+    assert installation_is_heat([]) is None
+    assert installation_is_heat([_z(False, None)]) is None
+
+
+@pytest.mark.parametrize(
+    "is_heat, keep_floor, expected",
+    [(True, False, "0"), (False, False, "1"), (True, True, "4"), (False, True, "5")],
+)
+def test_turn_on_mode_value_turns_air_on_and_keeps_floor(is_heat, keep_floor, expected):
+    assert turn_on_mode_value(is_heat, keep_floor) == expected
+
+
+@pytest.mark.parametrize(
+    "is_heat, zone_on, is_ac, floor_on, expected",
+    [
+        (True, True, True, True, ("mode", "4")),  # air on → air+floor
+        (False, True, True, True, ("mode", "5")),
+        (True, True, False, True, ("mode", "2")),  # floor only
+        (True, False, True, True, ("mode", "2")),  # zone off: air counts as off
+        (True, True, True, False, ("mode", "0")),  # air stays on
+        (True, True, False, False, ("power", None)),  # nothing left → off
+        (True, False, True, False, ("power", None)),
+    ],
+)
+def test_floor_change_command(is_heat, zone_on, is_ac, floor_on, expected):
+    assert floor_change_command(is_heat, zone_on, is_ac, floor_on) == expected
+
+
 # --- parse_status_payload ---
 
 
@@ -132,6 +183,7 @@ def test_parse_status_payload_full(status_payload):
         "allow_cool": True,
         "allow_fan": False,
         "allow_floor": False,
+        "is_main": False,
     }
 
 
@@ -349,3 +401,12 @@ def test_parse_feedback_payload_missing_order_id_and_ctl_logs_warning(caplog):
 
     assert result == {"order_id": None, "ctl": None, "raw": {"unrelated": "field"}}
     assert "neither 'orderId' nor 'ctl' found" in caplog.text
+
+
+def test_parse_status_payload_main_zone():
+    payload = {
+        "ctl": "INST_A",
+        "value": {"t": [{"rf": "DEV_1", "pl": "0"}, {"rf": "DEV_2", "pl": "1"}]},
+    }
+    zones = parse_status_payload(payload)["zones"]
+    assert [z["is_main"] for z in zones] == [False, True]

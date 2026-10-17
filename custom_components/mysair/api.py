@@ -446,7 +446,9 @@ class MySairAPI:
         Send a correctly formatted instruction to control a zone thermostat.
 
         command_type can be:
-            - "mode"     → turn on in heat or cool (value = "0" or "1")
+            - "mode"     → turn on with the given ``m`` (value = "0".."5": even
+                           heat, odd cool; 0/1 air, 2/3 floor, 4/5 both)
+                           and setpoint ``temperature``
             - "temp"     → change the setpoint (value = temperature)
             - "power"    → turn off (value = "0")
             - "fanspeed" → fan speed (value = "0".."4"; see docs/protocol-findings.md §9)
@@ -458,9 +460,11 @@ class MySairAPI:
             app_name = self._app_name()
 
             if command_type == "mode":
-                if value not in ["0", "1"]:
-                    raise ValueError("Invalid mode: use '0' for heat or '1' for cool.")
-                payload_value = {"mode": value, "temperature": str(temperature or 22.0)}
+                if value not in ("0", "1", "2", "3", "4", "5"):
+                    raise ValueError("Invalid mode: use '0'..'5'.")
+                if temperature is None:
+                    raise ValueError("Missing setpoint for the 'mode' command.")
+                payload_value = {"mode": value, "temperature": str(temperature)}
 
             elif command_type == "temp":
                 payload_value = str(value)
@@ -498,8 +502,11 @@ class MySairAPI:
             )
             raise
 
-    def send_installation_command(self, ctl, command_type, value=None):
-        """Send an instruction for a whole installation (empty ``device``).
+    def send_installation_command(self, ctl, command_type, value=None, device=""):
+        """Send an instruction for a whole installation.
+
+        ``device`` is empty for ``status``. For ``stop`` the official app sends
+        the main zone (``pl="1"``) as the device.
 
         command_type can be:
             - "stop"   → stop the whole installation (value = "1", F5)
@@ -525,7 +532,7 @@ class MySairAPI:
                     "sender": "WEB",
                     "ctl": ctl,
                     "app": app_name,
-                    "device": "",
+                    "device": device or "",
                     "command": command_type,
                     "value": payload_value,
                 }

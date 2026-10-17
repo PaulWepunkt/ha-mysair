@@ -27,6 +27,8 @@ setFanspeed(e,t,i,...){ _sendInstruction(e,t,"fanspeed",""+i,...) }
 setTemporizer(e,t,i,...){ _sendInstruction(e,t,"temporizer",i,...) }
 stopInstallation(e,t,...){ _sendInstruction(e,t,"stop","1",...) }
 getPrograms(e,t,...){ _sendInstruction(e,t,"programs","",...) }
+// Programm-Dialog: save()   -> _sendInstruction(ctl, zone, "update-program", program, ...)
+//                  remove() -> _sendInstruction(ctl, zone, "delete-program", program, ...)
 getStatus(e,...){ $api.instruction(_generateInstruction(e,"","status","sync")) }
 ```
 
@@ -36,10 +38,14 @@ getStatus(e,...){ $api.instruction(_generateInstruction(e,"","status","sync")) }
 | `mode` | `{mode:"0".."5", temperature:"<tc>"}` | Einschalten / Modus setzen |
 | `temp` | `"<temp>"` | Soll-Temperatur |
 | `fanspeed` | `"<n>"` | Lüfterstufe |
-| `temporizer` | `<timer>` | Timer |
-| `stop` | `"1"` | Installation stoppen |
+| `temporizer` | `"30"`/`"60"`/`"90"`/`"120"` (Minuten bis zum Ausschalten), `"0"` = aus | Timer; nur angeboten, wenn `tz` = `"1"` |
+| `stop` | `"1"` | Installation stoppen; `device` = Hauptzone (`pl` = `"1"`) |
 | `status` | `"sync"` | Zustand anfordern |
 | `programs` | `""` | Programme lesen |
+| `update-program` | Programmobjekt | Programm anlegen oder ändern (höchstens 3 je Zone) |
+| `delete-program` | Programmobjekt | Programm löschen |
+
+Die Felder des Programmobjekts und die Antwort von `programs` sind noch nicht vollständig gegen echten Datenverkehr geprüft; siehe `known-unknowns.md` #27.
 
 ## 3. Ein- und Ausschalten
 
@@ -89,6 +95,19 @@ Auf Installationsebene (`ae`): `this.heat = ["0","2","4"].includes(t.m)` → bes
 | `5` | ✓ | ✓ | Kühlen |
 
 **Gerade = Heizen, ungerade = Kühlen.** Einen automatischen Wechsel zwischen Heizen und Kühlen gibt es nicht: Die sechs Werte decken genau die Kombinationen Luft/Fußboden × Heizen/Kühlen ab.
+
+## 4b. Richtung der Anlage und Schutz durch die App (BESTÄTIGT)
+
+Die App speichert keine Richtung je Zone. Jede Zone zeigt die Richtung der **Installation** an (`te.isModeHeat()` ruft `installation.isModeHeat()` auf):
+
+- **Richtung der Installation** = Parität von `m` der ersten eingeschalteten Zone; ist keine Zone an, die der ersten Zone (Reihenfolge wie vom Controller gemeldet).
+- **Installation an** = mindestens eine Zone hat `e` ≠ `"0"`.
+- **Richtungswechsel:** Ist die Installation an, zeigt die App nur einen Hinweis („Zuerst die Anlage vollständig ausschalten, dann den Modus wählen, dann ein Thermostat einschalten“) und sendet nichts. Ist sie aus, wird die Richtung nur lokal gemerkt und mit dem nächsten Einschalten gesendet.
+- **Einschalten** (`togglePowerDevice(true)`): Luft an, Fußboden wie bisher (Bit aus `m`), Richtung der Installation, Soll-Temperatur `tc`; gesendet als `mode`.
+- **Fußboden umschalten** (`toggleRadiatingFloor`): `setModeHeat(isModeAC(), floor)`. Die Luft behält ihren Zustand (zählt nur bei eingeschalteter Zone). Bleibt weder Luft noch Fußboden an, sendet die App `power "0"`.
+- **Anlage stoppen** (`stop()`): `device` ist die Referenz der Hauptzone (`pl` = `"1"`), nicht leer.
+
+Der Schutz liegt also in der App, nicht im Backend. Die Integration übernimmt dieselben Regeln (`zone_control.py`). Zusätzlich nutzt sie den Fußboden beim Kühlen nur, wenn die Option „Fußbodenkühlung erlauben“ eingeschaltet ist, weil MySair keinen Taupunktschutz meldet.
 
 ## 5. Felder der Zonen-Nutzdaten (Abbildung in `_validateInstallation`)
 
@@ -177,9 +196,10 @@ Konfiguration im Bundle: `VUE_APP_API_DOMAIN="https://api.mysair.es"`, `VUE_APP_
 
 | Bereich | Umsetzung in der Integration |
 |---|---|
-| Befehl `mode` Heizen/Kühlen (nur Luft) | `0`=Heizen, `1`=Kühlen – korrekt |
+| Befehl `mode` | alle Werte `0`–`5`; Richtung, Luft und Fußboden nach §4b (`zone_control.py`) |
+| Richtungsschutz | wie die App (§4b): bei laufender Anlage nur die aktuelle Richtung; `climate.hvac_modes` folgt den anderen Zonen |
 | Statusparser: Modus | Ein/Aus aus `e`, Heizen/Kühlen aus der Parität von `m`, Luft/Fußboden aus den Mengen in §4 (`status_parser.parse_mode`) |
-| Einschalten über `switch` | Sendet `mode` und behält den zuletzt bekannten Modus bei |
+| Einschalten über `switch`/`climate` | wie die App: Luft an, Fußboden wie bisher, Richtung der Installation, aktuelle Soll-Temperatur |
 | `power` aus | `value:"0"` – korrekt |
 | Felder `tr`/`tc`/`tmm`/`tmx` | korrekt; `tmm`/`tmx` setzen `climate.min_temp`/`max_temp` |
 | MQTT-`client_id` | eindeutig je Verbindung (`mqtt_handler.build_client_id`) |
@@ -189,8 +209,8 @@ Konfiguration im Bundle: `VUE_APP_API_DOMAIN="https://api.mysair.es"`, `VUE_APP_
 | Topic `usr/{user}/feedback` | abonniert; Befehle werden über `orderId` bestätigt, sonst zurückgesetzt (§8) |
 | Fähigkeiten `c`/`f` und Luftfeuchte | `climate.hvac_modes` je nach `allow_heat`/`allow_cool`; Feuchtesensor je Zone |
 | Fähigkeiten `v`/`s` | Lüfterstufe in `climate` (§9); Schalter „Fußbodenheizung“ je Zone |
-| Befehle `fanspeed`/`stop` | umgesetzt (`climate.fan_mode`, Dienst `mysair.stop_installation`) |
-| Befehle `temporizer`/`programs` | bewusst nicht umgesetzt: Das Format zum Setzen ist im Bundle nicht entschlüsselt (siehe `docs/known-unknowns.md` #27) |
+| Befehle `fanspeed`/`stop` | umgesetzt (`climate.fan_mode`, Dienst `mysair.stop_installation` an die Hauptzone) |
+| Befehle `temporizer`/`programs`/`update-program`/`delete-program` | noch nicht umgesetzt (geplant); siehe `docs/known-unknowns.md` #27 |
 
 ---
 

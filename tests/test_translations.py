@@ -42,3 +42,20 @@ def test_translated_states_cover_enum_options():
     assert set(mode["state"]) == {"off", "heat", "cool", "on"}
     medium = mode["state_attributes"]["medium"]["state"]
     assert set(medium) == {"air", "floor", "air_and_floor"}
+
+
+def test_every_control_error_is_translated():
+    import re
+
+    source = (BASE / "zone_control.py").read_text(encoding="utf-8")
+    source += (BASE / "climate.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'control_error\("([a-z_]+)"\)', source))
+    assert used
+    exceptions = _load(BASE / "strings.json")["exceptions"]
+    assert used <= set(exceptions)
+
+
+def test_options_flow_is_translated():
+    options = _load(BASE / "strings.json")["options"]["step"]["init"]
+    assert "allow_floor_cooling" in options["data"]
+    assert "allow_floor_cooling" in options["data_description"]

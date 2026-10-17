@@ -22,7 +22,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.mysair.const import DOMAIN, FEEDBACK_TIMEOUT_SECONDS
+from custom_components.mysair.const import (
+    CONF_ALLOW_FLOOR_COOLING,
+    DOMAIN,
+    FEEDBACK_TIMEOUT_SECONDS,
+)
 from custom_components.mysair.api import MySairAPI
 from custom_components.mysair.mqtt_handler import MySairMQTTClient
 
@@ -254,7 +258,8 @@ async def test_climate_set_hvac_mode_sends_command(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     # C5: the entity is "unavailable" until the first MQTT status.
-    _fire_status(hass, "INST_A", _zone())
+    # All zones off: the direction may be chosen freely (season change).
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     await hass.services.async_call(
@@ -301,18 +306,19 @@ async def test_switch_turn_on_off_sends_commands(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     # C5: the entity is "unavailable" until the first MQTT status.
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False, temp_target=21.5))
     await hass.async_block_till_done()
 
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
     )
+    # Like the app: air on, installation direction, current setpoint (no 22 °C).
     assert calls[-1] == {
         "ctl": "INST_A",
         "device": "DEV_1",
         "command_type": "mode",
         "value": "0",
-        "temperature": 22.0,
+        "temperature": 21.5,
     }
     assert hass.states.get("switch.salon_power").state == "on"
 
@@ -329,15 +335,15 @@ async def test_switch_turn_on_off_sends_commands(hass, monkeypatch):
     assert hass.states.get("switch.salon_power").state == "off"
 
 
-async def test_switch_preserves_last_ac_mode_from_mqtt(hass, monkeypatch):
+async def test_switch_turn_on_uses_installation_direction(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
 
-    # The real state arrives over MQTT in cool mode ("1"); turning on again must preserve it.
+    # The installation is in cool mode ("1"); turning on must keep it.
     _fire_status(
         hass,
         "INST_A",
-        _zone(is_on=True, is_ac=True, mode_raw="1", is_heat=False, is_cool=True),
+        _zone(is_on=False, is_ac=True, mode_raw="1", is_heat=False, is_cool=True),
     )
     await hass.async_block_till_done()
 
@@ -378,7 +384,10 @@ async def test_floor_switch_available_and_reflects_state_with_capability(
 
 async def test_floor_switch_turn_on_preserves_heat_cool_and_ac(hass, monkeypatch):
     calls = []
-    await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
+    entry = await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_ALLOW_FLOOR_COOLING: True}
+    )
     # Zone in air-only cool (m="1"): enabling floor must switch to air+floor cool (m="5").
     _fire_status(
         hass,
@@ -515,7 +524,7 @@ async def test_climate_command_confirmed_via_feedback(hass, monkeypatch, caplog)
     caplog.set_level(logging.DEBUG)
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     await hass.services.async_call(
@@ -540,7 +549,7 @@ async def test_climate_command_feedback_from_other_installation_ignored(
     caplog.set_level(logging.INFO)
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     await hass.services.async_call(
@@ -567,7 +576,7 @@ async def test_climate_command_timeout_logs_warning_when_mqtt_disconnected(
     caplog.set_level(logging.INFO)
     calls = []
     entry = await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     mqtt_client = hass.data[DOMAIN][entry.entry_id]["mqtt"]
@@ -595,7 +604,7 @@ async def test_climate_command_timeout_logs_warning_when_mqtt_connected(
     caplog.set_level(logging.INFO)
     calls = []
     entry = await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     mqtt_client = hass.data[DOMAIN][entry.entry_id]["mqtt"]
@@ -621,7 +630,7 @@ async def test_switch_command_confirmed_via_feedback(hass, monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
-    _fire_status(hass, "INST_A", _zone())
+    _fire_status(hass, "INST_A", _zone(is_on=False))
     await hass.async_block_till_done()
 
     await hass.services.async_call(
@@ -780,10 +789,10 @@ async def test_climate_hvac_mode_reverts_on_timeout(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(
-        hass, "INST_A", _zone(is_on=True, is_heat=True, is_cool=False, mode_raw="0")
+        hass, "INST_A", _zone(is_on=False, is_heat=True, is_cool=False, mode_raw="0")
     )
     await hass.async_block_till_done()
-    assert hass.states.get("climate.salon").state == HVACMode.HEAT
+    assert hass.states.get("climate.salon").state == HVACMode.OFF
 
     await hass.services.async_call(
         "climate",
@@ -797,7 +806,7 @@ async def test_climate_hvac_mode_reverts_on_timeout(hass, monkeypatch):
     async_fire_time_changed(hass, future)
     await hass.async_block_till_done()
 
-    assert hass.states.get("climate.salon").state == HVACMode.HEAT  # reverted
+    assert hass.states.get("climate.salon").state == HVACMode.OFF  # reverted
 
 
 async def test_climate_temperature_reverts_on_timeout(hass, monkeypatch):
@@ -869,7 +878,7 @@ async def test_climate_pending_revert_cleared_by_real_status(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(
-        hass, "INST_A", _zone(is_on=True, is_heat=True, is_cool=False, mode_raw="0")
+        hass, "INST_A", _zone(is_on=False, is_heat=True, is_cool=False, mode_raw="0")
     )
     await hass.async_block_till_done()
 
@@ -999,3 +1008,235 @@ async def test_cloud_connection_sensor_is_diagnostic(hass, monkeypatch):
         "online",
         "offline",
     )
+
+
+# --- Steering like the official app (direction lock, turn on, floor) ---
+
+
+async def _setup_two_zones(hass, monkeypatch, calls, options=None):
+    """Installation with two zones: DEV_1 (climate.salon) and DEV_2 (climate.cocina)."""
+    entry = await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
+    monkeypatch.setattr(
+        MySairAPI,
+        "get_devices",
+        lambda self, ref: [
+            {"reference": "DEV_1", "name": "Salon"},
+            {"reference": "DEV_2", "name": "Cocina"},
+        ],
+    )
+    if options is not None:
+        hass.config_entries.async_update_entry(entry, options=options)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+def _mode_zone(zone_id, m, is_on, **overrides):
+    """Zone with the flags parse_mode derives from m."""
+    n = int(m)
+    return _zone(
+        zone_id=zone_id,
+        mode_raw=m,
+        is_on=is_on,
+        is_heat=n % 2 == 0,
+        is_cool=n % 2 == 1,
+        is_ac=n in (0, 1, 4, 5),
+        is_floor=n in (2, 3, 4, 5),
+        allow_floor=True,
+        **overrides,
+    )
+
+
+def _fire_zones(hass, *zones):
+    hass.bus.async_fire(
+        f"{DOMAIN}_update",
+        {
+            "topic": "pro/v1/get/ctl/INST_A/status",
+            "data": {"ctl": "INST_A", "zones": list(zones)},
+        },
+    )
+
+
+async def test_running_zone_locks_direction_of_other_zones(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", True))
+    await hass.async_block_till_done()
+
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "heat"]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "climate",
+            "set_hvac_mode",
+            {"entity_id": "climate.salon", "hvac_mode": "cool"},
+            blocking=True,
+        )
+    assert calls == []
+
+
+async def test_all_zones_off_allow_both_directions(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    modes = hass.states.get("climate.salon").attributes["hvac_modes"]
+    assert modes == ["off", "heat", "cool"]
+
+
+async def test_direction_lock_follows_other_zone_updates(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    # Only DEV_2 reports: it now runs in cool → DEV_1 may only cool.
+    _fire_zones(hass, _mode_zone("DEV_2", "1", True))
+    await hass.async_block_till_done()
+    assert hass.states.get("climate.salon").attributes["hvac_modes"] == ["off", "cool"]
+
+
+async def test_climate_turn_on_uses_installation_direction(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", False, temp_target=24.0),
+        _mode_zone("DEV_2", "1", True),
+    )
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate", "turn_on", {"entity_id": "climate.salon"}, blocking=True
+    )
+    assert calls == [
+        {
+            "ctl": "INST_A",
+            "device": "DEV_1",
+            "command_type": "mode",
+            "value": "1",
+            "temperature": 24.0,
+        }
+    ]
+    assert hass.states.get("climate.salon").state == HVACMode.COOL
+
+
+async def test_turn_on_keeps_floor_setting(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    # DEV_1 off with floor-only heat in m: turning on adds the air (m=4).
+    _fire_zones(hass, _mode_zone("DEV_1", "2", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+    )
+    assert calls[-1]["value"] == "4"
+
+
+async def test_turn_on_in_cooling_drops_floor_unless_allowed(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "5", False), _mode_zone("DEV_2", "1", True))
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate", "turn_on", {"entity_id": "climate.salon"}, blocking=True
+    )
+    assert calls[-1]["value"] == "1"  # air only: floor cooling not allowed
+
+
+async def test_turn_on_in_cooling_keeps_floor_when_allowed(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(
+        hass, monkeypatch, calls, options={CONF_ALLOW_FLOOR_COOLING: True}
+    )
+    _fire_zones(hass, _mode_zone("DEV_1", "5", False), _mode_zone("DEV_2", "1", True))
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate", "turn_on", {"entity_id": "climate.salon"}, blocking=True
+    )
+    assert calls[-1]["value"] == "5"
+
+
+async def test_switch_turn_on_rejected_when_zone_cannot_follow_direction(
+    hass, monkeypatch
+):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "1", False, allow_heat=False),
+        _mode_zone("DEV_2", "0", True),
+    )
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+        )
+    assert err.value.translation_key == "direction_locked"
+    assert calls == []
+
+
+async def test_floor_switch_rejects_floor_cooling_by_default(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "1", True), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.salon_floor_heating"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "floor_cooling_disabled"
+    assert calls == []
+
+
+async def test_floor_switch_turn_off_last_medium_turns_zone_off(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "2", True), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.salon_floor_heating").state == "on"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.salon_floor_heating"}, blocking=True
+    )
+    assert calls[-1]["command_type"] == "power"
+
+
+async def test_floor_switch_turn_on_while_zone_off_starts_floor_only(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", False, temp_target=21.0),
+        _mode_zone("DEV_2", "0", False),
+    )
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.salon_floor_heating"}, blocking=True
+    )
+    assert calls[-1] == {
+        "ctl": "INST_A",
+        "device": "DEV_1",
+        "command_type": "mode",
+        "value": "2",
+        "temperature": 21.0,
+    }
+
+
+async def test_floor_switch_is_off_while_zone_is_off(hass, monkeypatch):
+    # Like the app: the floor only counts as on while the zone is on.
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "4", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.salon_floor_heating").state == "off"

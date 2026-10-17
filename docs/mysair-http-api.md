@@ -143,16 +143,17 @@ Die Erkennungsmethoden geben Fehler als `MySairAuthError`/`MySairConnectionError
 
 | `command` | `value` | Bedeutung | Umgesetzt |
 |---|---|---|---|
-| `mode` | `{"mode":"0".."5","temperature":"<tc>"}` | **Einschalten / Modus setzen.** `m`: gerade=Heizen, ungerade=Kühlen; {0,1,4,5}=Luft, {2,3,4,5}=Fußboden | ✅ (Heizen/Kühlen aus `climate.py`; Kombination Luft/Fußboden aus `switch.py` → `MySairFloorSwitch`, die denselben Befehl nutzt und `m` mit `compute_mode_value` neu berechnet) |
+| `mode` | `{"mode":"0".."5","temperature":"<tc>"}` | **Einschalten / Modus setzen.** `m`: gerade=Heizen, ungerade=Kühlen; {0,1,4,5}=Luft, {2,3,4,5}=Fußboden | ✅ (`climate.py`, `switch.py`; `m` nach den Regeln der App, siehe `protocol-findings.md` §4b und `zone_control.py`) |
 | `power` | `"0"` | **Ausschalten** (es gibt kein `power:"1"`; eingeschaltet wird über `mode`) | ✅ |
 | `temp` | `"<temperatur>"` (String) | Soll-Temperatur ändern | ✅ |
 | `status` | `"sync"` (mit `device:""`) | Zustand anfordern | ✅ |
 | `fanspeed` | `"<n>"` (String, `"0"`–`"4"`) | Lüfterstufe | ✅ |
-| `stop` | `"1"` | Installation stoppen | ✅ (`send_installation_command`, Dienst `mysair.stop_installation`) |
-| `temporizer` | `<timer>` | Timer | ❌ bewusst nicht: Format zum Setzen im Bundle nicht bestätigt, siehe `known-unknowns.md` #27 |
-| `programs` | `""` | Programme lesen | ❌ bewusst nicht: kein bestätigter Schreibbefehl, siehe `known-unknowns.md` #27 |
+| `stop` | `"1"` (mit `device` = Hauptzone, `pl`=`"1"`) | Installation stoppen | ✅ (`send_installation_command`, Dienst `mysair.stop_installation`; ohne bekannten Status `device:""`) |
+| `temporizer` | `"30"`/`"60"`/`"90"`/`"120"`, `"0"` = aus | Timer bis zum Ausschalten | ❌ noch nicht (geplant) |
+| `programs` | `""` | Programme lesen | ❌ noch nicht (geplant), siehe `known-unknowns.md` #27 |
+| `update-program` / `delete-program` | Programmobjekt | Programm anlegen/ändern bzw. löschen | ❌ noch nicht (geplant), siehe `known-unknowns.md` #27 |
 
-> ✅ Die Kodierung des **Befehls** `mode` (`0`=Heizen, `1`=Kühlen für Luft) ist korrekt. Siehe `docs/protocol-findings.md` §7.
+> ✅ Die Kodierung des **Befehls** `mode` (`0`–`5`, gerade = Heizen) ist bestätigt. Siehe `docs/protocol-findings.md` §7.
 
 - **Erwartete Antwort (201):**
   ```json

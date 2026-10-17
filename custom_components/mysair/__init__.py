@@ -300,11 +300,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             installation_ref = call.data[ATTR_INSTALLATION_REF]
             for entry_data in hass.data.get(DOMAIN, {}).values():
                 if installation_ref in entry_data.get("installations", []):
+                    # Like the official app, the stop goes to the main zone
+                    # (pl="1"). Empty device if no status has arrived yet.
+                    coordinator = entry_data.get("coordinator")
+                    main_zone = (
+                        coordinator.installation_state(installation_ref).main_zone_id
+                        if coordinator
+                        else None
+                    )
                     try:
                         await hass.async_add_executor_job(
                             entry_data["api"].send_installation_command,
                             installation_ref,
                             "stop",
+                            None,
+                            main_zone or "",
                         )
                     except Exception as e:
                         raise HomeAssistantError(
