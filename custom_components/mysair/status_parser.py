@@ -153,6 +153,53 @@ def has_direction_conflict(zones):
     return len(directions) > 1
 
 
+# Medium a zone is turned on with, chosen per zone and direction.
+MEDIUM_APP = "app"  # like the app's power button: air on, floor as before
+MEDIUM_AIR = "air"
+MEDIUM_FLOOR = "floor"
+MEDIUM_AIR_AND_FLOOR = "air_and_floor"
+
+
+def media_options(allow_air, allow_floor):
+    """Media a zone can be turned on with, given what is allowed and possible.
+
+    ``allow_floor`` must already include whether the zone has a floor. Empty
+    if no medium is allowed (the zone cannot run in this direction).
+    """
+    options = []
+    if allow_air:
+        options.append(MEDIUM_AIR)
+    if allow_floor:
+        options.append(MEDIUM_FLOOR)
+    if allow_air and allow_floor:
+        options.append(MEDIUM_AIR_AND_FLOOR)
+    return [MEDIUM_APP, *options] if options else []
+
+
+def select_media(choice, allow_air, allow_floor, last_floor):
+    """Air and floor state for turning a zone on: ``(air, floor)`` or None.
+
+    ``choice`` is one of the MEDIUM_* values. Media that are not allowed are
+    dropped; if nothing is left, the app behaviour applies within what is
+    allowed. None means no medium is allowed at all.
+    """
+    wanted = {
+        MEDIUM_AIR: (True, False),
+        MEDIUM_FLOOR: (False, True),
+        MEDIUM_AIR_AND_FLOOR: (True, True),
+    }.get(choice)
+    if wanted is not None:
+        air, floor = wanted[0] and allow_air, wanted[1] and allow_floor
+        if air or floor:
+            return air, floor
+    # App behaviour: air on, floor as before - limited to what is allowed.
+    air = bool(allow_air)
+    floor = bool(last_floor and allow_floor)
+    if not air and not floor:
+        floor = bool(allow_floor)
+    return (air, floor) if (air or floor) else None
+
+
 def turn_on_mode_value(is_heat, keep_floor):
     """``m`` to send when a zone is turned on (app: ``togglePowerDevice``).
 

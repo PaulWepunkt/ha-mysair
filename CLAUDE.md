@@ -92,12 +92,12 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `device.py` | Gerätebaum: `account_device_info` (Konto, Cloud-Verbindung) → `installation_device_info` (Steuerung, Software-Version aus `v`) → `zone_device_info`. Der Zonen-Gerätename ist der Zonenname, weil HA ihn den Entitätsnamen voranstellt (`has_entity_name`). Geräte nur über `find_device` (je Config Entry) suchen, nicht über das abgekündigte `async_get_device` |
 | `installation_entity.py` | Basisklasse für Entitäten am Installationsgerät (Signal `signal_installation_update`, `AvailabilityMixin`) |
 | `binary_sensor.py` | Je Installation: „In Betrieb“ (mindestens eine Zone an) und „Heiz-/Kühlkonflikt“ (Diagnose) |
-| `select.py` | Je Installation: „Betriebsart“ (Heizen/Kühlen); Wechsel nur bei ausgeschalteter Anlage, wird wie in der App nur lokal gemerkt (`MySairCoordinator.choose_direction`) |
+| `select.py` | Je Installation: „Betriebsart“ (Heizen/Kühlen); Wechsel nur bei ausgeschalteter Anlage, wird wie in der App nur lokal gemerkt (`MySairCoordinator.choose_direction`). Je Zone: „Heizen mit“/„Kühlen mit“ (Einstellungs-Entitäten, Wahl als Extra-Daten über `RestoreEntity` gespeichert) |
 | `button.py` | Je Installation: „Anlage stoppen“ (`zone_control.async_stop_installation`, wie der Dienst) |
 | `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
 | `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Hauptzone“ (Diagnose) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) |
-| `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen („Fußbodenkühlung erlauben“) |
+| `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen (erlaubte Medien je Richtung, `MEDIA_PERMISSION_KEYS` in `const.py`) |
 | `const.py` | Konstanten (Zeitlimits, Abfrageintervall des Verbindungssensors, Dienstname) |
 | `diagnostics.py` | Diagnose-Download in der HA-Oberfläche mit geschwärzten Zugangsdaten/Token |
 | `services.yaml` | Schema des Dienstes `mysair.stop_installation` |
@@ -249,7 +249,9 @@ Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.m
 - **Eindeutige MQTT-`client_id` je Verbindung**, sonst verdrängen sich Integration und offizielle App gegenseitig.
 - **Entity-IDs:** Mit `has_entity_name` bildet HA die IDs aus Gerät (= Zonenname) und Entitätsname in der eingestellten Sprache. Bestehende Installationen behalten ihre IDs, solange die `unique_id` gleich bleibt (dafür gibt es einen Test). `unique_id`s nie ändern.
 - **Erfolg von `/send/instruction`** = HTTP 201 + leere Liste `error`. Den Text in `msg` nie vergleichen: Er hängt von der Kontosprache ab (`"Creado"`, `"Created"` …).
-- **Richtung der Anlage wie in der App** (`protocol-findings.md` §4b, `zone_control.py`): Läuft eine Zone, sind nur „Aus“ und die aktuelle Richtung erlaubt. Einschalten = Luft an, Fußboden wie bisher, Richtung der Anlage, aktuelle Soll-Temperatur. Fußboden beim Kühlen nur mit der Option `allow_floor_cooling`. `stop` geht an die Hauptzone (`pl`).
+- **Richtung der Anlage wie in der App** (`protocol-findings.md` §4b, `zone_control.py`): Läuft eine Zone, sind nur „Aus“ und die aktuelle Richtung erlaubt. Einschalten im Standard „Wie die MySair-App“ = Luft an, Fußboden wie bisher, Richtung der Anlage, aktuelle Soll-Temperatur. Welche Medien je Richtung verwendet werden dürfen, legen die Optionen fest (`zone_control.media_permissions`); das Medium beim Einschalten wählt jede Zone mit „Heizen mit“/„Kühlen mit“ (`status_parser.select_media`). Fußbodenkühlung ist standardmäßig aus. `stop` geht an die Hauptzone (`pl`).
+- **Lüfter:** `vv` = `"0"` ist die zonale Geschwindigkeit (Standard der Anlage), nicht „Aus“ (`protocol-findings.md` §9/§10).
+- **Handbücher der Thermostate** (`protocol-findings.md` §10): Die Anlage lehnt Richtungswechsel bei laufendem Betrieb selbst ab; Fußbodenkühlung am Thermostat lässt sich nur in der Anlage sperren.
 - **Fehler beim Senden** von Befehlen werden als übersetzte `HomeAssistantError` (`command_failed`, `zone_control.command_error`) angezeigt; der optimistische Zustand wird dabei nicht gesetzt bzw. zurückgenommen.
 - **Verwaiste Zonen** werden bei jedem Setup/Reload entfernt (`_cleanup_stale_zone_devices`); das Kontogerät (Kennung `entry_id`) bleibt unangetastet.
 

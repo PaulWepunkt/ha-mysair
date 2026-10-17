@@ -58,5 +58,34 @@ def test_every_control_error_is_translated():
 
 def test_options_flow_is_translated():
     options = _load(BASE / "strings.json")["options"]["step"]["init"]
-    assert "allow_floor_cooling" in options["data"]
-    assert "allow_floor_cooling" in options["data_description"]
+    keys = {
+        "allow_air_heating",
+        "allow_floor_heating",
+        "allow_air_cooling",
+        "allow_floor_cooling",
+    }
+    assert set(options["data"]) == keys
+    assert set(options["data_description"]) == keys
+    errors = _load(BASE / "strings.json")["options"]["error"]
+    assert set(errors) == {"no_medium_heat", "no_medium_cool"}
+
+
+def test_medium_select_states_cover_all_media():
+    selects = _load(BASE / "strings.json")["entity"]["select"]
+    for key in ("heating_medium", "cooling_medium"):
+        assert set(selects[key]["state"]) == {"app", "air", "floor", "air_and_floor"}
+
+
+def test_fan_modes_are_translated():
+    climate = _load(BASE / "strings.json")["entity"]["climate"]["thermostat"]
+    states = climate["state_attributes"]["fan_mode"]["state"]
+    assert set(states) == {"zonal", "1", "2", "3", "auto"}
+
+
+def test_exception_translations_have_a_message():
+    # hassfest requires {"message": "..."} for every exception translation.
+    for path in [BASE / "strings.json"] + [
+        BASE / "translations" / f"{lang}.json" for lang in LANGUAGES
+    ]:
+        for key, value in _load(path)["exceptions"].items():
+            assert isinstance(value, dict) and "message" in value, (path.name, key)

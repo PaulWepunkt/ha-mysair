@@ -89,6 +89,9 @@ class MySairCoordinator:
         # Only held locally, like in the app; it is sent with the next zone
         # that is turned on and dropped as soon as a zone is on.
         self._chosen_is_heat = {}
+        # (ctl, zone_id, is_heat) -> medium chosen for turning the zone on
+        # (select entities per zone; restored by them after a restart).
+        self._medium_choice = {}
         self._unsub = None
 
     def start(self) -> None:
@@ -157,6 +160,19 @@ class MySairCoordinator:
         device = find_device(self.hass, self._entry_id, installation_identifier(ctl))
         if device is not None and device.sw_version != firmware:
             dr.async_get(self.hass).async_update_device(device.id, sw_version=firmware)
+
+    def medium_choice(self, ctl: str, zone_id: str, is_heat: bool) -> str:
+        """Medium chosen for a zone and direction (default: like the app)."""
+        return self._medium_choice.get((ctl, zone_id, bool(is_heat)), "app")
+
+    def set_medium_choice(self, ctl, zone_id, is_heat, medium: str) -> None:
+        self._medium_choice[(ctl, zone_id, bool(is_heat))] = medium
+
+    @callback
+    def async_options_updated(self) -> None:
+        """Options changed: allowed media may differ, refresh dependent entities."""
+        for ctl in self._installation_refs:
+            async_dispatcher_send(self.hass, signal_installation_update(ctl), False)
 
     @property
     def entry_id(self) -> str:

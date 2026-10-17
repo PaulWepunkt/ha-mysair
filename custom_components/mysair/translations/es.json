@@ -54,12 +54,45 @@
         "name": "Parar instalación"
       }
     },
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "zonal": "Zonal (por defecto)",
+              "1": "Baja",
+              "2": "Media",
+              "3": "Alta",
+              "auto": "Auto"
+            }
+          }
+        }
+      }
+    },
     "select": {
       "operating_mode": {
         "name": "Modo de funcionamiento",
         "state": {
           "heat": "Calor",
           "cool": "Frío"
+        }
+      },
+      "heating_medium": {
+        "name": "Calentar con",
+        "state": {
+          "app": "Como la app MySair",
+          "air": "Solo aire",
+          "floor": "Solo suelo",
+          "air_and_floor": "Aire y suelo"
+        }
+      },
+      "cooling_medium": {
+        "name": "Enfriar con",
+        "state": {
+          "app": "Como la app MySair",
+          "air": "Solo aire",
+          "floor": "Solo suelo",
+          "air_and_floor": "Aire y suelo"
         }
       }
     },
@@ -110,14 +143,24 @@
     "step": {
       "init": {
         "title": "Opciones de MySair",
-        "description": "Ajustes de comportamiento de la integración.",
+        "description": "Qué medios puede usar Home Assistant para calentar y para enfriar. Cada zona elige además su medio con los ajustes «Calentar con» y «Enfriar con».",
         "data": {
+          "allow_air_heating": "Permitir calefacción por aire",
+          "allow_floor_heating": "Permitir suelo radiante",
+          "allow_air_cooling": "Permitir refrigeración por aire",
           "allow_floor_cooling": "Permitir suelo refrescante"
         },
         "data_description": {
+          "allow_air_heating": "Los equipos de aire pueden usarse para calentar. Desactívalo solo si la instalación no debe calentar por aire.",
+          "allow_floor_heating": "El suelo puede usarse para calentar.",
+          "allow_air_cooling": "Los equipos de aire pueden usarse para enfriar.",
           "allow_floor_cooling": "Actívalo solo si la instalación está preparada para suelo refrescante y protegida contra condensaciones (punto de rocío). Desactivado, Home Assistant no usa el suelo mientras la instalación enfría."
         }
       }
+    },
+    "error": {
+      "no_medium_heat": "Permite al menos un medio para calentar.",
+      "no_medium_cool": "Permite al menos un medio para enfriar."
     }
   },
   "exceptions": {
@@ -135,6 +178,12 @@
     },
     "command_failed": {
       "message": "No se pudo enviar la orden a MySair. Comprueba la conexión y vuelve a intentarlo."
+    },
+    "no_medium_allowed": {
+      "message": "No hay ningún medio permitido para esta zona en este modo. Revisa las opciones de la integración MySair."
+    },
+    "floor_heating_disabled": {
+      "message": "El suelo radiante está desactivado en las opciones de la integración MySair."
     }
   }
 }

@@ -5,7 +5,11 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 
-from .const import CONF_ALLOW_FLOOR_COOLING, DOMAIN
+from .const import (
+    DOMAIN,
+    MEDIA_PERMISSION_DEFAULTS,
+    MEDIA_PERMISSION_KEYS,
+)
 from .api import MySairAPI, MySairAuthError, MySairConnectionError
 
 _LOGGER = logging.getLogger(__name__)
@@ -132,24 +136,33 @@ class MySairConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class MySairOptionsFlow(OptionsFlow):
-    """Options of the MySair integration.
+    """Options of the MySair integration: media allowed for heating and cooling.
 
     Entities read the options at the moment a command is sent, so no reload
     is needed after a change.
     """
 
     async def async_step_init(self, user_input=None) -> ConfigFlowResult:
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            # Each direction needs at least one medium, otherwise no zone
+            # could ever run in it.
+            for is_heat, (air_key, floor_key) in MEDIA_PERMISSION_KEYS.items():
+                if not user_input.get(air_key) and not user_input.get(floor_key):
+                    errors["base"] = "no_medium_heat" if is_heat else "no_medium_cool"
+            if not errors:
+                return self.async_create_entry(data=user_input)
 
+        current = {**MEDIA_PERMISSION_DEFAULTS, **self.config_entry.options}
+        if user_input is not None:
+            current.update(user_input)
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_ALLOW_FLOOR_COOLING,
-                    default=self.config_entry.options.get(
-                        CONF_ALLOW_FLOOR_COOLING, False
-                    ),
-                ): bool,
+                vol.Required(key, default=bool(current[key])): bool
+                for key in (
+                    *MEDIA_PERMISSION_KEYS[True],
+                    *MEDIA_PERMISSION_KEYS[False],
+                )
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

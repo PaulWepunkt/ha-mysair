@@ -24,7 +24,9 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.mysair.const import (
+    CONF_ALLOW_AIR_HEATING,
     CONF_ALLOW_FLOOR_COOLING,
+    CONF_ALLOW_FLOOR_HEATING,
     DOMAIN,
     FEEDBACK_TIMEOUT_SECONDS,
 )
@@ -709,7 +711,7 @@ async def test_climate_fan_mode_updates_from_mqtt_event(hass, monkeypatch):
 
     state = hass.states.get("climate.salon")
     assert state.attributes["fan_mode"] == "2"
-    assert set(state.attributes["fan_modes"]) == {"off", "1", "2", "3", "auto"}
+    assert set(state.attributes["fan_modes"]) == {"zonal", "1", "2", "3", "auto"}
 
 
 async def test_climate_fan_mode_auto_mapping(hass, monkeypatch):
@@ -731,19 +733,20 @@ async def test_climate_fan_mode_none_when_not_allowed(hass, monkeypatch):
     assert state.attributes["fan_modes"] == []
 
 
-async def test_climate_fan_mode_off_when_wire_is_zero(hass, monkeypatch):
-    # "0" = no fan mode active (the app's fan icon toggles between "0" and "4").
+async def test_climate_fan_mode_zonal_when_wire_is_zero(hass, monkeypatch):
+    # "0" = zonal speed, the default chosen by the control module (thermostat
+    # manual); the app's fan icon toggles between "0" and "4".
     await _setup_entry(hass, monkeypatch)
 
     _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="0"))
     await hass.async_block_till_done()
 
     state = hass.states.get("climate.salon")
-    assert state.attributes["fan_mode"] == "off"
-    assert state.attributes["fan_modes"] == ["off", "1", "2", "3", "auto"]
+    assert state.attributes["fan_mode"] == "zonal"
+    assert state.attributes["fan_modes"] == ["zonal", "1", "2", "3", "auto"]
 
 
-async def test_climate_set_fan_mode_off_sends_zero(hass, monkeypatch):
+async def test_climate_set_fan_mode_zonal_sends_zero(hass, monkeypatch):
     calls = []
     await _setup_entry(hass, monkeypatch, send_zone_command_calls=calls)
     _fire_status(hass, "INST_A", _zone(allow_fan=True, fan_mode="4"))
@@ -752,7 +755,7 @@ async def test_climate_set_fan_mode_off_sends_zero(hass, monkeypatch):
     await hass.services.async_call(
         "climate",
         "set_fan_mode",
-        {"entity_id": "climate.salon", "fan_mode": "off"},
+        {"entity_id": "climate.salon", "fan_mode": "zonal"},
         blocking=True,
     )
     assert calls[-1]["command_type"] == "fanspeed"
@@ -1013,6 +1016,8 @@ async def test_entity_names_follow_ha_language(hass, monkeypatch):
     assert names["sensor.mysair_inst_a_hauptzone"] == "MySair INST_A Hauptzone"
     assert names["binary_sensor.mysair_inst_a_in_betrieb"] == "MySair INST_A In Betrieb"
     assert "binary_sensor.mysair_inst_a_heiz_kuhlkonflikt" in names
+    assert names["select.salon_heizen_mit"] == "Salon Heizen mit"
+    assert names["select.salon_kuhlen_mit"] == "Salon Kühlen mit"
 
 
 async def test_mode_sensor_is_enum_with_translated_options(hass, monkeypatch):
@@ -1070,8 +1075,7 @@ def _mode_zone(zone_id, m, is_on, **overrides):
         is_cool=n % 2 == 1,
         is_ac=n in (0, 1, 4, 5),
         is_floor=n in (2, 3, 4, 5),
-        allow_floor=True,
-        **overrides,
+        **{"allow_floor": True, **overrides},
     )
 
 
@@ -1595,3 +1599,147 @@ async def test_failed_switch_command_raises_and_keeps_state(
         )
     assert err.value.translation_key == "command_failed"
     assert hass.states.get(entity_id).state == before
+
+
+# --- Medium per direction: options and per-zone selects ---
+
+
+async def _select_medium(hass, entity_id, option):
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": entity_id, "option": option},
+        blocking=True,
+    )
+
+
+async def test_heating_medium_select_floor_only(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    heat_with = _entity_id(hass, "select", "mysair_heating_medium_INST_A_DEV_1")
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    state = hass.states.get(heat_with)
+    assert state.state == "app"
+    assert state.attributes["options"] == ["app", "air", "floor", "air_and_floor"]
+
+    await _select_medium(hass, heat_with, "floor")
+    assert calls == []  # nothing is sent when the choice changes
+
+    await hass.services.async_call(
+        "climate", "turn_on", {"entity_id": "climate.salon"}, blocking=True
+    )
+    assert calls[-1]["value"] == "2"  # floor only, heat
+
+
+async def test_medium_choice_is_restored_after_restart(hass, monkeypatch):
+    from pytest_homeassistant_custom_component.common import (
+        mock_restore_cache_with_extra_data,
+    )
+    from homeassistant.core import State
+
+    # The displayed state may be unavailable when HA saves it; the choice
+    # itself is kept in the extra data.
+    mock_restore_cache_with_extra_data(
+        hass,
+        [(State("select.salon_heat_with", "unavailable"), {"choice": "air_and_floor"})],
+    )
+    calls = []
+    await _setup_two_zones(hass, monkeypatch, calls)
+    _fire_zones(hass, _mode_zone("DEV_1", "0", False), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+    heat_with = _entity_id(hass, "select", "mysair_heating_medium_INST_A_DEV_1")
+    assert heat_with == "select.salon_heat_with"
+    assert hass.states.get(heat_with).state == "air_and_floor"
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+    )
+    assert calls[-1]["value"] == "4"
+
+
+async def test_air_heating_disallowed_uses_floor(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(
+        hass, monkeypatch, calls, options={CONF_ALLOW_AIR_HEATING: False}
+    )
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", False),
+        _mode_zone("DEV_2", "0", False, allow_floor=False),
+    )
+    await hass.async_block_till_done()
+
+    heat_with = _entity_id(hass, "select", "mysair_heating_medium_INST_A_DEV_1")
+    assert hass.states.get(heat_with).attributes["options"] == ["app", "floor"]
+
+    # "Like the app" would turn the air on; air heating is not allowed.
+    await hass.services.async_call(
+        "climate", "turn_on", {"entity_id": "climate.salon"}, blocking=True
+    )
+    assert calls[-1]["value"] == "2"
+
+    # A zone without floor cannot heat at all: no HEAT, no heating select.
+    cocina = hass.states.get("climate.cocina")
+    assert "heat" not in cocina.attributes["hvac_modes"]
+    heat_with_2 = _entity_id(hass, "select", "mysair_heating_medium_INST_A_DEV_2")
+    assert hass.states.get(heat_with_2).state == "unavailable"
+
+
+async def test_zone_without_heating_medium_does_not_start_cooling(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(
+        hass, monkeypatch, calls, options={CONF_ALLOW_AIR_HEATING: False}
+    )
+    _fire_zones(
+        hass,
+        _mode_zone("DEV_1", "0", False, allow_floor=False),
+        _mode_zone("DEV_2", "0", False),
+    )
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": "switch.salon_power"}, blocking=True
+        )
+    assert err.value.translation_key == "no_medium_allowed"
+    assert calls == []
+
+
+async def test_floor_switch_rejects_disallowed_floor_heating(hass, monkeypatch):
+    calls = []
+    await _setup_two_zones(
+        hass, monkeypatch, calls, options={CONF_ALLOW_FLOOR_HEATING: False}
+    )
+    _fire_zones(hass, _mode_zone("DEV_1", "0", True), _mode_zone("DEV_2", "0", False))
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.salon_floor_heating"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "floor_heating_disabled"
+    assert calls == []
+
+
+async def test_options_change_updates_select_options(hass, monkeypatch):
+    entry = await _setup_two_zones(hass, monkeypatch, [])
+    _fire_zones(hass, _mode_zone("DEV_1", "1", False), _mode_zone("DEV_2", "1", False))
+    await hass.async_block_till_done()
+    cool_with = _entity_id(hass, "select", "mysair_cooling_medium_INST_A_DEV_1")
+    assert hass.states.get(cool_with).attributes["options"] == ["app", "air"]
+
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_ALLOW_FLOOR_COOLING: True}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(cool_with).attributes["options"] == [
+        "app",
+        "air",
+        "floor",
+        "air_and_floor",
+    ]

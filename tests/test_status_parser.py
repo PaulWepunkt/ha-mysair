@@ -11,6 +11,8 @@ from status_parser import (
     compute_mode_value,
     floor_change_command,
     has_direction_conflict,
+    media_options,
+    select_media,
     installation_is_heat,
     turn_on_mode_value,
     parse_mode,
@@ -429,3 +431,37 @@ def test_has_direction_conflict():
     assert has_direction_conflict([_z(True, True), _z(False, False)]) is False
     assert has_direction_conflict([_z(True, None), _z(True, True)]) is False
     assert has_direction_conflict([]) is False
+
+
+# --- Medium per zone and direction (options + selects) ---
+
+
+def test_media_options():
+    assert media_options(True, True) == ["app", "air", "floor", "air_and_floor"]
+    assert media_options(True, False) == ["app", "air"]
+    assert media_options(False, True) == ["app", "floor"]
+    assert media_options(False, False) == []
+
+
+@pytest.mark.parametrize(
+    "choice, allow_air, allow_floor, last_floor, expected",
+    [
+        # Like the app: air on, floor as before.
+        ("app", True, True, False, (True, False)),
+        ("app", True, True, True, (True, True)),
+        # Air not allowed: the floor takes over.
+        ("app", False, True, False, (False, True)),
+        # Floor not allowed (or no floor): air only.
+        ("app", True, False, True, (True, False)),
+        ("floor", True, True, False, (False, True)),
+        ("air", True, True, True, (True, False)),
+        ("air_and_floor", True, True, False, (True, True)),
+        # A choice that is no longer allowed falls back to the app rule.
+        ("floor", True, False, False, (True, False)),
+        ("air_and_floor", False, True, False, (False, True)),
+        # Nothing allowed.
+        ("app", False, False, True, None),
+    ],
+)
+def test_select_media(choice, allow_air, allow_floor, last_floor, expected):
+    assert select_media(choice, allow_air, allow_floor, last_floor) == expected

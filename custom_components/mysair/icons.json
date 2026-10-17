@@ -19,12 +19,45 @@
         "default": "mdi:stop-circle-outline"
       }
     },
+    "climate": {
+      "thermostat": {
+        "default": "mdi:thermostat",
+        "state_attributes": {
+          "fan_mode": {
+            "default": "mdi:fan",
+            "state": {
+              "zonal": "mdi:fan-auto",
+              "1": "mdi:fan-speed-1",
+              "2": "mdi:fan-speed-2",
+              "3": "mdi:fan-speed-3",
+              "auto": "mdi:fan-auto"
+            }
+          }
+        }
+      }
+    },
     "select": {
       "operating_mode": {
         "default": "mdi:sun-snowflake-variant",
         "state": {
           "heat": "mdi:fire",
           "cool": "mdi:snowflake"
+        }
+      },
+      "heating_medium": {
+        "default": "mdi:radiator",
+        "state": {
+          "air": "mdi:fan",
+          "floor": "mdi:heat-wave",
+          "air_and_floor": "mdi:home-thermometer"
+        }
+      },
+      "cooling_medium": {
+        "default": "mdi:snowflake-thermometer",
+        "state": {
+          "air": "mdi:fan",
+          "floor": "mdi:heat-wave",
+          "air_and_floor": "mdi:home-thermometer"
         }
       }
     },

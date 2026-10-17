@@ -8,7 +8,13 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mysair.const import CONF_ALLOW_FLOOR_COOLING, DOMAIN
+from custom_components.mysair.const import (
+    CONF_ALLOW_AIR_COOLING,
+    CONF_ALLOW_AIR_HEATING,
+    CONF_ALLOW_FLOOR_COOLING,
+    CONF_ALLOW_FLOOR_HEATING,
+    DOMAIN,
+)
 from custom_components.mysair.api import (
     MySairAPI,
     MySairAuthError,
@@ -177,10 +183,61 @@ async def test_options_flow_floor_cooling_defaults_off_and_saves(hass):
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
     defaults = {str(key): key.default() for key in result["data_schema"].schema}
-    assert defaults == {CONF_ALLOW_FLOOR_COOLING: False}
+    # Defaults keep the behaviour of the app; floor cooling stays off.
+    assert defaults == {
+        CONF_ALLOW_AIR_HEATING: True,
+        CONF_ALLOW_FLOOR_HEATING: True,
+        CONF_ALLOW_AIR_COOLING: True,
+        CONF_ALLOW_FLOOR_COOLING: False,
+    }
 
+    user_input = {
+        CONF_ALLOW_AIR_HEATING: False,
+        CONF_ALLOW_FLOOR_HEATING: True,
+        CONF_ALLOW_AIR_COOLING: True,
+        CONF_ALLOW_FLOOR_COOLING: True,
+    }
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={CONF_ALLOW_FLOOR_COOLING: True}
+        result["flow_id"], user_input=user_input
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_ALLOW_FLOOR_COOLING: True}
+    assert entry.options == user_input
+
+
+@pytest.mark.parametrize(
+    "user_input, error",
+    [
+        (
+            {
+                CONF_ALLOW_AIR_HEATING: False,
+                CONF_ALLOW_FLOOR_HEATING: False,
+                CONF_ALLOW_AIR_COOLING: True,
+                CONF_ALLOW_FLOOR_COOLING: False,
+            },
+            "no_medium_heat",
+        ),
+        (
+            {
+                CONF_ALLOW_AIR_HEATING: True,
+                CONF_ALLOW_FLOOR_HEATING: True,
+                CONF_ALLOW_AIR_COOLING: False,
+                CONF_ALLOW_FLOOR_COOLING: False,
+            },
+            "no_medium_cool",
+        ),
+    ],
+)
+async def test_options_flow_requires_a_medium_per_direction(hass, user_input, error):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="user@example.com",
+        data={"email": "user@example.com", "refresh_token": "R"},
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input=user_input
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+    assert entry.options == {}
