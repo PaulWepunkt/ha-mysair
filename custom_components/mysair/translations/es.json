@@ -68,6 +68,33 @@
               "3": "Alta",
               "auto": "Auto"
             }
+          },
+          "can_heat": {
+            "name": "Calefacción posible (c)"
+          },
+          "can_cool": {
+            "name": "Refrigeración posible (f)"
+          },
+          "has_floor": {
+            "name": "Suelo disponible (s)"
+          },
+          "has_fan": {
+            "name": "Ventilador ajustable (v)"
+          },
+          "has_timer": {
+            "name": "Temporizador posible (tz)"
+          },
+          "has_programs": {
+            "name": "Programas posibles (hp)"
+          },
+          "raw_power": {
+            "name": "Encendido (e)"
+          },
+          "raw_mode": {
+            "name": "Modo (m)"
+          },
+          "raw_fan": {
+            "name": "Ventilador (vv)"
           }
         }
       }

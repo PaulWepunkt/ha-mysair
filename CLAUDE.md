@@ -94,7 +94,7 @@ Der Code der Integration liegt in `custom_components/mysair/` (Standardlayout HA
 | `binary_sensor.py` | Je Installation: „In Betrieb“ (mindestens eine Zone an), „Heiz-/Kühlkonflikt“ (Diagnose) und „Betriebsart weicht ab“ (nur mit „Betriebsart festhalten“) |
 | `select.py` | Je Installation: „Betriebsart“ (Heizen/Kühlen); Wechsel nur bei ausgeschalteter Anlage, wird wie in der App nur lokal gemerkt (`MySairCoordinator.choose_direction`). Mit „Betriebsart festhalten“ (Schalter in `switch.py`) ist sie die festgehaltene Richtung der Wärmepumpe (`InstallationState.held_is_heat`, über `RestoreEntity` gespeichert). Je Zone: „Heizen mit“/„Kühlen mit“ (Einstellungs-Entitäten, Wahl als Extra-Daten über `RestoreEntity` gespeichert) |
 | `button.py` | Je Installation: „Anlage stoppen“ (`zone_control.async_stop_installation`, wie der Dienst) |
-| `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe) |
+| `climate.py` | `MySairThermostat` (ClimateEntity, inkl. Lüfterstufe, Luftfeuchte, Fähigkeiten und Rohwerte `e`/`m`/`vv` der Zone als Attribute `CAPABILITY_ATTRIBUTES`/`RAW_ATTRIBUTES`) |
 | `sensor.py` | 4 Sensoren je Zone (Temperatur, Soll-Temperatur, Modus, Luftfeuchte) + `MySairMqttStatusSensor` („Cloud-Verbindung“, einer je Config Entry, Diagnose-Entität) + je Installation „Hauptzone“ (Diagnose) |
 | `switch.py` | `MySairSwitch` (Ein/Aus) + `MySairFloorSwitch` (Fußbodenheizung) je Zone; je Installation `MySairHoldDirectionSwitch` („Betriebsart festhalten“, Einstellungs-Entität) |
 | `config_flow.py` | Einrichtungsdialog (E-Mail + Passwort), Reauth und Optionen (erlaubte Medien je Richtung, `MEDIA_PERMISSION_KEYS` in `const.py`) |
@@ -259,8 +259,8 @@ Die vollständige Historie steht im `CHANGELOG.md` und in `docs/execution-plan.m
 Offen:
 - 🟡 **Doppelte/vertauschte MQTT-Nachrichten** ohne Tests (doppelte `feedback`-Quittungen kommen vor).
 - 🟡 **Uninterpretierte Zonenfelder** `vf`, `hmh`, `mh`, `p`, `ps` (`docs/known-unknowns.md`).
-- 🟡 **Timer und Programme** (F6, `known-unknowns.md` #27): Befehle bekannt; das Programmobjekt vor der Umsetzung mit echtem Datenverkehr bestätigen.
 
 Abgrenzungen (keine Fehler):
 - **Nur der erste Standort** (`known-unknowns.md` #15).
+- **Keine Timer und Programme von MySair** (F6, `known-unknowns.md` #27): Zeitsteuerung über Home Assistant. Die Fähigkeiten `tz`/`hp` werden nur als Attribute des Thermostats angezeigt.
 - **Kein zusätzlicher PR an `home-assistant/brands`**: Nutzer von HA vor 2026.3.0 sehen Symbol und Logo erst nach einem Update.

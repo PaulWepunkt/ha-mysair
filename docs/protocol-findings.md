@@ -210,7 +210,8 @@ Konfiguration im Bundle: `VUE_APP_API_DOMAIN="https://api.mysair.es"`, `VUE_APP_
 | Fähigkeiten `c`/`f` und Luftfeuchte | `climate.hvac_modes` je nach `allow_heat`/`allow_cool`; Feuchtesensor je Zone |
 | Fähigkeiten `v`/`s` | Lüfterstufe in `climate` (§9); Schalter „Fußbodenheizung“ je Zone |
 | Befehle `fanspeed`/`stop` | umgesetzt (`climate.fan_mode`, Dienst `mysair.stop_installation` an die Hauptzone) |
-| Befehle `temporizer`/`programs`/`update-program`/`delete-program` | noch nicht umgesetzt (geplant); siehe `docs/known-unknowns.md` #27 |
+| Fähigkeiten `c`/`f`/`s`/`v`/`tz`/`hp` und Rohwerte `e`/`m`/`vv` | als Attribute des Thermostats (Name mit Feld in Klammern); Fähigkeiten auch im Diagnose-Download |
+| Befehle `temporizer`/`programs`/`update-program`/`delete-program` | bewusst nicht umgesetzt: Zeitsteuerung lässt sich in Home Assistant mit Automationen und Zeitplänen abbilden; siehe `docs/known-unknowns.md` #27 |
 
 ---
 

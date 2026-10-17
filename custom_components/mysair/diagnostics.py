@@ -61,4 +61,28 @@ async def async_get_config_entry_diagnostics(
         "devices": data["devices"],
         "api": async_redact_data(api_state, TO_REDACT_API),
         "mqtt": mqtt_state,
+        "zone_capabilities": _zone_capabilities(data.get("coordinator")),
+    }
+
+
+_CAPABILITY_FIELDS = (
+    "allow_heat",
+    "allow_cool",
+    "allow_floor",
+    "allow_fan",
+    "allow_timer",
+    "allow_programs",
+)
+
+
+def _zone_capabilities(coordinator) -> dict[str, Any]:
+    """Capabilities of each zone from the last status (no personal data)."""
+    if coordinator is None:
+        return {}
+    return {
+        ctl: {
+            zone_id: {field: zone.get(field) for field in _CAPABILITY_FIELDS}
+            for zone_id, zone in zones.items()
+        }
+        for ctl, zones in coordinator.zones().items()
     }

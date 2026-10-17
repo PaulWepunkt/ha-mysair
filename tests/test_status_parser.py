@@ -186,6 +186,8 @@ def test_parse_status_payload_full(status_payload):
         "allow_cool": True,
         "allow_fan": False,
         "allow_floor": False,
+        "allow_timer": False,
+        "allow_programs": False,
         "is_main": False,
     }
 
@@ -465,3 +467,13 @@ def test_media_options():
 )
 def test_select_media(choice, allow_air, allow_floor, last_floor, expected):
     assert select_media(choice, allow_air, allow_floor, last_floor) == expected
+
+
+def test_parse_status_payload_timer_and_program_capabilities():
+    payload = {
+        "ctl": "X",
+        "value": '{"t":[{"rf":"D","e":"0","m":"0","tz":"1","hp":"0"}]}',
+    }
+    zone = parse_status_payload(payload)["zones"][0]
+    assert zone["allow_timer"] is True
+    assert zone["allow_programs"] is False

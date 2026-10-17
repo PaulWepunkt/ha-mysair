@@ -80,7 +80,7 @@
 | F3 | Modus `auto`, falls das System ihn kennt. | ✅ geprüft – **vom Protokoll nicht unterstützt** (`m` 0–5 deckt genau die sechs Kombinationen ab). Ungenutzte Konstante entfernt. |
 | F4 | Funktionierendes `select` für den Modus. | ✅ erledigt als **Umwidmung**: Das alte `select.py` doppelte `climate.hvac_mode`. Stattdessen gibt es einen Schalter „Fußbodenheizung“ je Zone, der den vorhandenen Befehl `mode` nutzt. |
 | F5 | Dienst `mysair.stop_installation` (Befehl `stop`, `value:"1"`). | ✅ erledigt – einmal je Domain registriert, nach dem letzten Entladen entfernt. |
-| F6 | Timer (`temporizer`) und Programme (`programs`, `update-program`, `delete-program`). | 🟡 geplant – Befehle im Bundle gefunden; das Programmobjekt muss vor der Umsetzung mit echtem Datenverkehr bestätigt werden. Siehe `known-unknowns.md` #27. |
+| F6 | Timer (`temporizer`) und Programme (`programs`, `update-program`, `delete-program`). | ⛔ bewusst nicht umgesetzt: Zeitsteuerung lässt sich in Home Assistant mit Automationen und Zeitplänen abbilden. Die Fähigkeiten `tz`/`hp` werden nur angezeigt. Siehe `known-unknowns.md` #27. |
 
 ---
 

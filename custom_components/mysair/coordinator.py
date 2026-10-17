@@ -234,6 +234,10 @@ class MySairCoordinator:
         """Last known state of a zone, or None before its first status."""
         return self._zones.get(ctl, {}).get(zone_id)
 
+    def zones(self) -> dict[str, dict[str, dict]]:
+        """Last known state of all zones, per installation (copy)."""
+        return {ctl: dict(zones) for ctl, zones in self._zones.items()}
+
     def installation_state(self, ctl: str) -> InstallationState:
         """Direction, on state and main zone of an installation."""
         zones = list(self._zones.get(ctl, {}).values())

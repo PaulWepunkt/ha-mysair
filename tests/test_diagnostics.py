@@ -102,3 +102,50 @@ async def test_diagnostics_includes_installations_devices_and_mqtt_state(
     assert result["mqtt"]["parse_error_count"] == 0
     assert result["mqtt"]["last_close_code"] is None
     assert result["mqtt"]["last_close_msg"] is None
+
+
+async def test_diagnostics_includes_zone_capabilities(hass, monkeypatch):
+    _patch_happy_api(monkeypatch)
+    entry = _make_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["zone_capabilities"] == {}  # no status received yet
+
+    hass.bus.async_fire(
+        "mysair_update",
+        {
+            "topic": "pro/v1/get/ctl/INST_A/status",
+            "data": {
+                "ctl": "INST_A",
+                "zones": [
+                    {
+                        "zone_id": "DEV_1",
+                        "allow_heat": True,
+                        "allow_cool": False,
+                        "allow_floor": True,
+                        "allow_fan": True,
+                        "allow_timer": False,
+                        "allow_programs": True,
+                    }
+                ],
+            },
+        },
+    )
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["zone_capabilities"] == {
+        "INST_A": {
+            "DEV_1": {
+                "allow_heat": True,
+                "allow_cool": False,
+                "allow_floor": True,
+                "allow_fan": True,
+                "allow_timer": False,
+                "allow_programs": True,
+            }
+        }
+    }

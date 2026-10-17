@@ -20,7 +20,7 @@ Die Bedienoberfläche ist auf Deutsch, Englisch und Spanisch übersetzt; angezei
 
 | Entität | Entity-ID (deutsche Oberfläche) | Beschreibung |
 |---|---|---|
-| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, aktuelle Luftfeuchte, Lüfter („Standard“, bei dem die Anlage die Stufe selbst wählt, Niedrig/Mittel/Hoch oder Automatik, sofern die Zone das unterstützt). Scheitert ein Befehl, erscheint eine Fehlermeldung, und die Anzeige bleibt beim bisherigen Wert |
+| Thermostat | `climate.<zone>` | Ein/Aus, Heizen/Kühlen (je nach Fähigkeiten der Zone und Richtung der Anlage, siehe unten), Soll-Temperatur mit den echten Grenzwerten der Zone, aktuelle Luftfeuchte, Lüfter („Standard“, bei dem die Anlage die Stufe selbst wählt, Niedrig/Mittel/Hoch oder Automatik, sofern die Zone das unterstützt). Scheitert ein Befehl, erscheint eine Fehlermeldung, und die Anzeige bleibt beim bisherigen Wert. Die Attribute zeigen die Fähigkeiten der Zone mit dem MySair-Feld in Klammern: Heizen möglich (c), Kühlen möglich (f), Fußboden vorhanden (s), Lüfter einstellbar (v), Timer möglich (tz), Programme möglich (hp); dazu die Rohwerte Ein/Aus (e: 0 aus, 1 an, 2 Ziel erreicht), Modus (m: 0–5, gerade = Heizen) und Lüfter (vv: 0 Standard, 1–3, 4 Automatik) |
 | Ein/Aus | `switch.<zone>_ein_aus` | Schaltet die Zone ein oder aus. Eingeschaltet wird in der Richtung der Anlage mit der aktuellen Soll-Temperatur und dem Medium aus „Heizen mit“/„Kühlen mit“ |
 | Heizen mit / Kühlen mit | `select.<zone>_heizen_mit`, `select.<zone>_kuhlen_mit` | Einstellungs-Entitäten: womit die Zone beim Einschalten über Home Assistant heizt bzw. kühlt – „Standard“ (wie die MySair-App: Klimaanlage an, Fußboden wie zuletzt), „Nur Luft“, „Nur Fußboden“ oder „Luft und Fußboden“. Angeboten wird nur, was die Optionen erlauben und die Zone kann. Beim Umstellen wird nichts gesendet; die Wahl bleibt über einen Neustart erhalten |
 | Fußbodenheizung | `switch.<zone>_fussbodenheizung` | Fußboden ein/aus, kombinierbar mit der Klimaanlage derselben Zone; „an“ nur, solange die Zone läuft. Bleibt weder Klimaanlage noch Fußboden an, wird die Zone ausgeschaltet. In Zonen ohne Fußboden „nicht verfügbar“ |
@@ -100,7 +100,7 @@ Eine MySair-Anlage hat **eine** Richtung (Heizen oder Kühlen) für alle Zonen. 
 
 - **Nach einem Start oder Neuladen dauert es einige Sekunden, bis echte Werte erscheinen**: Bis zum ersten Status per MQTT sind die Entitäten „nicht verfügbar“ (ebenso, wenn die Verbindung länger als 6 Minuten unterbrochen ist), statt Standardwerte als Echtzeitdaten auszugeben.
 - **Nur die erste `Location`** des Kontos: Bei mehreren Standorten werden nur die Installationen des ersten geladen (bewusste Abgrenzung, siehe `docs/known-unknowns.md` #15).
-- **Noch keine Zeitprogramme oder Timer**: Die Befehle sind bekannt, die Umsetzung ist geplant (siehe `docs/known-unknowns.md` #27).
+- **Keine Zeitprogramme oder Timer von MySair**: bewusst nicht umgesetzt, weil sich Zeitsteuerung in Home Assistant mit Automationen und Zeitplänen abbilden lässt. Ob eine Zone sie unterstützt, zeigen die Attribute des Thermostats.
 - **Kein automatischer Heiz-/Kühlmodus**: Das ist keine Lücke der Integration – das Protokoll selbst kennt keinen automatischen Wechsel zwischen Heizen und Kühlen (siehe `docs/protocol-findings.md` §4). Die einzige echte Automatik des Systems ist die Lüfterstufe, und die ist umgesetzt.
 - Erfordert Home Assistant **≥ 2026.8.0**.
 

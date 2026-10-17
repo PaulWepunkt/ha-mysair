@@ -480,6 +480,42 @@ async def test_climate_current_humidity_from_status(hass, monkeypatch):
     assert "current_humidity" not in hass.states.get("climate.salon").attributes
 
 
+async def test_climate_capability_attributes(hass, monkeypatch):
+    await _setup_entry(hass, monkeypatch)
+
+    # Unavailable (and without attributes) until the first status.
+    assert "can_heat" not in hass.states.get("climate.salon").attributes
+
+    _fire_status(
+        hass,
+        "INST_A",
+        _zone(
+            allow_heat=True,
+            allow_cool=False,
+            allow_floor=True,
+            allow_fan=False,
+            allow_timer=True,
+            allow_programs=False,
+            power="2",
+            mode_raw="4",
+            fan_mode="0",
+        ),
+    )
+    await hass.async_block_till_done()
+
+    attrs = hass.states.get("climate.salon").attributes
+    assert attrs["can_heat"] is True
+    assert attrs["can_cool"] is False
+    assert attrs["has_floor"] is True
+    assert attrs["has_fan"] is False
+    assert attrs["has_timer"] is True
+    assert attrs["has_programs"] is False
+    # Raw MySair codes, unchanged.
+    assert attrs["raw_power"] == "2"
+    assert attrs["raw_mode"] == "4"
+    assert attrs["raw_fan"] == "0"
+
+
 async def test_climate_min_max_temp_from_status(hass, monkeypatch):
     await _setup_entry(hass, monkeypatch)
     # Before the first status: default values (10-30).
